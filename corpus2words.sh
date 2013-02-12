@@ -1,0 +1,1 @@
+perl -ane 'if ($F[0] eq "<s>"){print}elsif ($F[2]=~/^(NN|VV|RB|JJ)/ && $F[1]=~/^[A-Za-z\-]+$/ && $F[1]=~/^[A-Za-z]/ && $F[1]=~/[A-Za-z]$/ && $F[1]!~/\-\-/){if ($F[2]=~/VVG/){$pos=lc($F[2]); } else {$pos=lc(substr($F[2],0,1))}; print $F[1],"-",$pos,"\n"}'
