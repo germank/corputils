@@ -3,6 +3,7 @@ import argparse
 import fileinput
 import portalocker
 import os
+import numpy as np
 
 #MANY_COUNTS_PER_MARKER = 100000
 
@@ -42,12 +43,20 @@ def count_dense(args):
             args.output_dir, marker + '.dm')
 
 def save_dense_matrix(m, outdir, fname):
+    #make sure outdir exists
     try:
         os.mkdirs(outdir)
     except OSError:
         pass
-    try:
-        f = open(os.path.join(outdir,fname), 'r+')
+    outfile = os.path.join(outdir, fname)
+    #make sure fname exists
+    with open(outfile, 'a'):
+        pass
+    #save matrix
+    with open(outfile, 'r+') as fout:
+        for i in xrange(m.shape[0]):
+            current_pos = fout.tell()
+            fout.readline()
 
 
 
