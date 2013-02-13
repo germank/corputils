@@ -53,6 +53,8 @@ def main():
         i+=1
         if i % 1000 == 0:
             sys.stderr.write('.')
+            if i % 80000 == 0:
+                sys.stderr.write('\n')
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         #counts core space occurrences
         marker_coocurrences = coocurrences.setdefault(marker,
