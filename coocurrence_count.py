@@ -138,8 +138,9 @@ class SparseCounter():
                 sys.stderr.write('done\n')
     
     def save(self):
-        timeout = 60*60*2
+        timeout = 60*60*2 #infinite
         con = sqlite3.connect(self.output_db,timeout)
+        con.execute('BEGIN EXCLUSIVE TRANSACTION')
         #database locked, let's lock the sparse_coocurrences
         with self.coocurrences_lock:
             for marker in self.coocurrences.keys():
@@ -162,8 +163,8 @@ class SparseCounter():
                         raise
                 #clear from memory
                 del self.coocurrences[marker]
-            con.commit()
-            con.close()
+        con.commit()
+        con.close()
 
     
 def save_dense_matrix(m, outdir, fname):
