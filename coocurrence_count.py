@@ -21,7 +21,7 @@ def main():
         (e.g. word_i1<-->word_i2 marker word_j""")
     
     parser.add_argument('input', help="coocurrence tuples", default="-",
-        required=False)
+        nargs='*')
     parser.add_argument('-o', '--output_dir', 
         help="directory where a coocurrence count file will be created "
         "for each pattern", required=True)
