@@ -58,8 +58,9 @@ def main():
                 sys.stderr.write('\n')
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         #counts core space occurrences
-        marker_coocurrences = coocurrences.setdefault(marker,
-            np.zeros((len(rows),len(cols)),dtype=np.int))
+        if marker not in coocurrences:
+            coocurrences[marker] = np.zeros((len(rows),len(cols)),dtype=np.int)
+        marker_coocurrences = coocurrences[marker]
         if w1 in row2id and w2 in col2id:
             marker_coocurrences[(row2id[w1],col2id[w2])] += 1
         #counts peripheral space occurrences
@@ -121,8 +122,14 @@ def save_sparse_matrix(sparse_coocurrences_lock,
             con.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
                         "context text, occurrences int)".format(marker_table))
             for(w1,w2),c in marker_sparse_coocurrences.iteritems():
-                con.execute("INSERT INTO {0} VALUES('{1}','{2}',{3})".format(
-                    marker_table, w1, w2, c))
+                query = "INSERT INTO {0} VALUES('{1}','{2}',{3})".format(
+                        marker_table, w1.replace("'", "''"), 
+                        w2.replace("'", "''"), c)
+                try:
+                    con.execute(query)
+                except sqlite3.OperationalError:
+                    print query
+                    raise
             #clear from memory
             del sparse_coocurrences[marker]
         con.commit()
