@@ -104,7 +104,8 @@ def main():
 def load_words(filename):
     pivots = set()
     for line in fileinput.input(filename):
-        pivots.append(line.strip(' \t\n'))
+        pivots.add(line.strip(' \t\n'))
+    return pivots
 
 def build_composition_match_func(word_regexp, pos_regexp, wordset_file):
     '''
