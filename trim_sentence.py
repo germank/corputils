@@ -10,8 +10,11 @@ def main():
     ''')
     parser.add_argument('corpora', help='files with the parsed corpora',
         default="-", nargs='?')
+    parser.add_argument('--to-lower', default=False, 
+        help='changes lemmas to lowecase')
     parser.add_argument('--ppos', help='pivot pos regexp')
-    parser.add_argument('--pfile', help='file with a list of words used as pivots')
+    parser.add_argument('--pwords', help='file with a list of words that '
+    'should be kept')
 
     args = parser.parse_args()
 
@@ -34,13 +37,15 @@ def main():
             t = line.split('\t')
             t[3] = int(t[3])
             t[4] = int(t[4])
+            if args.to_lower:
+                t[1] = t[1].lower()
             #append pos tag as the first letter in lowercase
             sentence.append(t)   
 
 def get_pivot_filter(args):
     #pick up pivots
-    if args.pfile:
-        pivots = load_words(args.pfile)
+    if args.pwords:
+        pivots = load_words(args.pwords)
         is_pivot = lambda w: w[1] in pivots
     elif args.ppos:
         pivot_match = re.compile(args.ppos).match
