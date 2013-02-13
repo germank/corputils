@@ -11,7 +11,7 @@ def main():
     parser.add_argument('corpora', help='files with the parsed corpora',
         default="-", nargs='?')
     parser.add_argument('--to-lower', default=False, 
-        help='changes lemmas to lowecase')
+        help='changes lemmas to lowecase', action='store_true')
     parser.add_argument('--ppos', help='pivot pos regexp')
     parser.add_argument('--pwords', help='file with a list of words that '
     'should be kept')
