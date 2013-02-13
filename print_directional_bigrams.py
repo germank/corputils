@@ -8,6 +8,7 @@
 import argparse
 import fileinput
 import re
+import sys
 from functools import partial
 
 
@@ -42,7 +43,13 @@ def main():
     match_tag = re.compile("</?s>|</?text.*?>").match
 
     sentence = [] #list of tuples (w, l, pos, i, dep_i, dep_tag, "w-pos")
+    i=0
     for line in fileinput.input(args.corpora):
+        i+=1
+        if i % 1000 == 0:
+            sys.stderr.write('.')
+            if i % 80000 == 0:
+                sys.stderr.write('\n')
         if line.rstrip('\n') == "</s>":
             #process sentence
             for i, t in enumerate(sentence): #i,t = index,tuple in sentence

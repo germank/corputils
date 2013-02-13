@@ -58,16 +58,10 @@ def main():
     #coocurrences = {}
 
     
-    i=0
     core = SparseCounter(core_output_db)
     per = SparseCounter(per_output_db)
 
     for l in fileinput.input(args.input):
-        i+=1
-        if i % 1000 == 0:
-            sys.stderr.write('.')
-            if i % 80000 == 0:
-                sys.stderr.write('\n')
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         if args.compose_op in w1:
             tg = w1.split(args.compose_op)[1]
