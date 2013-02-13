@@ -138,12 +138,13 @@ class SparseCounter():
                 sys.stderr.write('done\n')
     
     def save(self):
-        con = sqlite3.connect(self.output_db)
+        con = sqlite3.connect(self.output_db, isolation_level=None)
         #database locked, let's lock the sparse_coocurrences
         with self.coocurrences_lock:
             for marker in self.coocurrences.keys():
                 marker_sparse_coocurrences = self.coocurrences[marker]
                 marker_table = '{0}'.format(marker)
+                con.execute("BEGIN EXCLUSIVE TRANSACTION")
                 con.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
                             "context text, occurrences int, PRIMARY "
                             "KEY(pivot,context))".format(marker_table))
