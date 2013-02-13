@@ -31,7 +31,8 @@ def main():
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
-    output_db = os.path.join(args.output_dir, 'sparse.db')
+    per_output_db = os.path.join(args.output_dir, 'peripheral.db')
+    core_output_db = os.path.join(args.output_dir, 'core.db')
     #make sure outdir exists
     try:
         os.makedirs(args.output_dir)
@@ -48,6 +49,8 @@ def main():
     coocurrences = {}
     peripheral_coocurrences = {}
     peripheral_coocurrences_lock = Lock()
+    core_coocurrences = {}
+    core_coocurrences_lock = Lock()
     
     i=0
     for l in fileinput.input(args.input):
@@ -58,18 +61,24 @@ def main():
                 sys.stderr.write('\n')
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         #counts core space occurrences
-        if marker not in coocurrences:
-            coocurrences[marker] = np.zeros((len(rows),len(cols)),dtype=np.int)
-        marker_coocurrences = coocurrences[marker]
-        if w1 in row2id and w2 in col2id:
-            marker_coocurrences[(row2id[w1],col2id[w2])] += 1
+        #if marker not in coocurrences:
+        #    coocurrences[marker] = np.zeros((len(rows),len(cols)),dtype=np.int)
+        #marker_coocurrences = coocurrences[marker]
+        #if w1 in row2id and w2 in col2id:
+        #    marker_coocurrences[(row2id[w1],col2id[w2])] += 1
         #counts peripheral space occurrences
-        if args.compose_op in w1:
+        if w1 in row2id and w2 in col2id:
+            save_sparse(core_coocurrences_lock, 
+                        core_coocurrences, w1, marker, w2)
+            ask_writing_if_many(core_coocurrences_lock,
+                                core_coocurrences, 
+                                core_output_db)
+        if args.compose_op in w1 and w1.split(args.compose_op)[1] in row2id:
             save_sparse(peripheral_coocurrences_lock, 
                         peripheral_coocurrences, w1, marker, w2)
             ask_writing_if_many(peripheral_coocurrences_lock,
                                 peripheral_coocurrences, 
-                                output_db)
+                                per_output_db)
     sys.stderr.write('\n')
     for marker,marker_coocurrences in coocurrences.iteritems():
         sys.stderr.write('writing {0}.pkl...\t'.format(marker))
@@ -84,9 +93,14 @@ def main():
             sys.stderr.write('done\n')
     #no more threads now, but there can be some residual
     if len(peripheral_coocurrences) > 0:
-        sys.stderr.write('saving sparse matrix...\t')
+        sys.stderr.write('saving peripheral matrix...\t')
         save_sparse_matrix(peripheral_coocurrences_lock,
-                           peripheral_coocurrences, output_db)
+                           peripheral_coocurrences, per_output_db)
+        sys.stderr.write('done\n')
+    if len(peripheral_coocurrences) > 0:
+        sys.stderr.write('saving core matrix...\t')
+        save_sparse_matrix(core_coocurrences_lock,
+                           core_coocurrences, core_output_db)
         sys.stderr.write('done\n')
         
 def save_sparse(peripheral_coocurrences_lock, 
@@ -120,9 +134,12 @@ def save_sparse_matrix(sparse_coocurrences_lock,
             marker_sparse_coocurrences = sparse_coocurrences[marker]
             marker_table = '{0}'.format(marker)
             con.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
-                        "context text, occurrences int)".format(marker_table))
+                        "context text, occurrences int, PRIMARY "
+                        "KEY(pivot,context))".format(marker_table))
             for(w1,w2),c in marker_sparse_coocurrences.iteritems():
-                query = "INSERT INTO {0} VALUES('{1}','{2}',{3})".format(
+                query = "INSERT OR REPLACE INTO {0} VALUES('{1}','{2}', "
+                "coalesce((select occurrences from {0} WHERE pivot ='{1}' AND "
+                "context='{2}'),0) + {3})".format(
                         marker_table, w1.replace("'", "''"), 
                         w2.replace("'", "''"), c)
                 try:
