@@ -3,6 +3,7 @@ import argparse
 import fileinput
 import portalocker
 import os
+import pickle
 import numpy as np
 
 #MANY_COUNTS_PER_MARKER = 100000
@@ -35,17 +36,18 @@ def count_dense(args):
     for l in fileinput.input(args.input):
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         marker_coocurrences = coocurrences.setdefault(marker,
-            zeros((len(rows),len(cols))),type=int)
-        marker_coocurrences[row2id[w1],col2id[w2]] += 1
+            np.zeros((len(rows),len(cols)),dtype=np.int))
+        if w1 in row2id and w2 in col2id:
+            marker_coocurrences[(row2id[w1],col2id[w2])] += 1
 
     for marker,marker_coocurrences in coocurrences.iteritems():
         save_dense_matrix(marker_coocurrences,
-            args.output_dir, marker + '.dm')
+            args.output_dir, marker + '.pkl')
 
 def save_dense_matrix(m, outdir, fname):
     #make sure outdir exists
     try:
-        os.mkdirs(outdir)
+        os.makedirs(outdir)
     except OSError:
         pass
     outfile = os.path.join(outdir, fname)
@@ -54,9 +56,28 @@ def save_dense_matrix(m, outdir, fname):
         pass
     #save matrix
     with open(outfile, 'r+') as fout:
-        for i in xrange(m.shape[0]):
-            current_pos = fout.tell()
-            fout.readline()
+        portalocker.lock(fout, portalocker.LOCK_EX)
+        not_empty = fout.read(1)
+        fout.seek(0)
+        if not_empty:
+            curr_mat = pickle.load(fout)
+            m += curr_mat
+            fout.seek(0)
+        pickle.dump(m, fout)
+
+        #dumb idea
+        #for i in xrange(m.shape[0]):
+        #    current_pos = fout.tell()
+        #    l = fout.readline()
+        #    if l:
+        #        current_row = np.array(l.split('\t'))
+        #        assert len(current_row) == m.shape[1]
+        #    else:
+        #        current_row = np.zeros(m.shape[1])
+        #    current_row += m[i]
+        #    l.seek(current_pos)
+
+
 
 
 
