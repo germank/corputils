@@ -6,11 +6,12 @@ import os
 import sys
 import pickle
 import sqlite3
+import random
 import numpy as np
 from datetime import datetime
 from threading import Lock, Thread, Condition
 
-MANY = 100000
+MANY = random.randint(50000,100000) #randomize so they dump at different moments
 
 
 def main():
@@ -118,7 +119,7 @@ class SparseCounter():
         with self.saving_thread_lock:
             if len(self) >= MANY\
             and not self.saving_thread:
-                self.saving_thread = Thread(target=self.run_dump, args=[self])
+                self.saving_thread = Thread(target=self.run_dump)
                 self.saving_thread.start()
                 
     def run_dump(self):
