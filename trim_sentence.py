@@ -54,6 +54,11 @@ def get_pivot_filter(args):
         is_pivot = lambda w: True
     return is_pivot
 
+def load_words(filename):
+    pivots = set()
+    for line in fileinput.input(filename):
+        pivots.append(line.strip(' \t\n'))
+
 def keep_pivots(sentence, is_pivot):
     '''removes the non-pivot words from the sentence and shift left the 
     dependency and word indexes in order to keep the references consistent'''
