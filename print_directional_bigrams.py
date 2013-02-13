@@ -21,6 +21,7 @@ def main():
         default="-", nargs='?')
     parser.add_argument('-w', dest='window_size', type=int, default=None)
     parser.add_argument('-s', dest='separator', default='<s>')
+    parser.add_argument('-x', '--comp_marker', default='<-->')
     parser.add_argument('--lword', help='left composition word regexp')
     parser.add_argument('--lpos', help='left composition pos regexp')
     parser.add_argument('--lfile', help='file contining left composition words')
@@ -29,6 +30,7 @@ def main():
     parser.add_argument('--rfile', help='right contining left composition words')
 
     args = parser.parse_args()
+    w = args.window_size
 
     #caracteristic functions of the pair of words for which we are
     #interested in finding the composition coocurrence
@@ -45,17 +47,19 @@ def main():
             #process sentence
             for i, t in enumerate(sentence): #i,t = index,tuple in sentence
                 #print coocurrences
-                for lt in sentence[:i-1]:
+                lend = max(0,i-w) if w else 0
+                for lt in sentence[lend:i]:
                     print "{0}\tl\t{1}".format(t[-1], lt[-1])
-                for rt in sentence[i+1:]:
+                rend = min(len(sentence),i+(w+1)) if w else len(sentence)
+                for rt in sentence[i+1:rend]:
                     print "{0}\tr\t{1}".format(t[-1], rt[-1])
                 #check if t should be composed
                 if left_comp_match(t) and t[4] > 0:
                     comp_t = sentence[t[4]-1]
                     assert comp_t[3] == t[4]
                     if right_comp_match(comp_t):
-                        comp_pivot = "{0}<-->{1}".format(
-                            t[-1], comp_t[-1])
+                        comp_pivot = "{0}{1}{2}".format(
+                            t[-1], args.comp_marker, comp_t[-1])
                         #put the composed words in order
                         if int(t[3]) < int(comp_t[3]):
                             lcomp_t = t
@@ -66,11 +70,23 @@ def main():
                         l = int(lcomp_t[3])-1
                         r = int(rcomp_t[3])-1
                         #print coocurrences
-                        for lt in sentence[:l]:
+                        #count left of first composed word
+                        lend = max(0,l-w) if w else 0
+                        for lt in sentence[lend:l]:
                             print "{0}\tl\t{1}".format(comp_pivot, lt[-1])
-                        for ct in sentence[l+1:r]:
+                        #count right of first and left of second in range of
+                        #the first
+                        lmid = min(r,l+(w+1)) if w else r
+                        for ct in sentence[l+1:lmid]:
                             print "{0}\tc\t{1}".format(comp_pivot, ct[-1])
-                        for rt in sentence[r+1:]:
+                        #count right of first and left of second in range of
+                        #the second
+                        rmid = max(lmid,r-w) if w else r
+                        for ct in sentence[rmid:r]:
+                            print "{0}\tc\t{1}".format(comp_pivot, ct[-1])
+                        rend = min(len(sentence), r+(w+1)) if w else \
+                            len(sentence)
+                        for rt in sentence[r+1:rend]:
                             print "{0}\tr\t{1}".format(comp_pivot, rt[-1])
 
             #start a new sentence
