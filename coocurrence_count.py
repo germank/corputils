@@ -138,7 +138,7 @@ class SparseCounter():
                 sys.stderr.write('done\n')
     
     def save(self):
-        timeout = 120
+        timeout = 60*60*2
         con = sqlite3.connect(self.output_db,timeout, isolation_level=None)
         #database locked, let's lock the sparse_coocurrences
         with self.coocurrences_lock:
