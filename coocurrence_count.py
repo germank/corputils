@@ -58,16 +58,10 @@ def main():
     #coocurrences = {}
 
     
-    i=0
     core = SparseCounter(core_output_db)
     per = SparseCounter(per_output_db)
 
     for l in fileinput.input(args.input):
-        i+=1
-        if i % 1000 == 0:
-            sys.stderr.write('.')
-            if i % 80000 == 0:
-                sys.stderr.write('\n')
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         if args.compose_op in w1:
             tg = w1.split(args.compose_op)[1]
@@ -131,11 +125,14 @@ class SparseCounter():
     def join(self):
         '''IMPORTANT: should be called before exiting to ensure that
         there is no pending write'''
+        thread_alive = None
         with self.saving_thread_lock:
             if self.saving_thread:
-                sys.stderr.write('wating for write in sparse matrix...\t')
-                self.saving_thread.join()
-                sys.stderr.write('done\n')
+                thread_alive = self.saving_thread
+        sys.stderr.write('waiting to write in sparse matrix...\t')
+        if thread_alive:
+            thread_alive.join()
+        sys.stderr.write('done\n')
     
     def save(self):
         timeout = 60*60*2 #infinite
