@@ -11,7 +11,7 @@ import numpy as np
 from datetime import datetime
 from threading import Lock, Thread, Condition
 
-MANY = random.randint(50000,100000) #randomize so they dump at different moments
+MANY = random.randint(5000,10000) #randomize so they dump at different moments
 
 
 def main():
