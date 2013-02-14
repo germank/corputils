@@ -8,10 +8,13 @@ import pickle
 import sqlite3
 import random
 import numpy as np
+import time
+import logging
 from datetime import datetime
 from threading import Lock, Thread, Condition
 
-MANY = random.randint(5000,10000) #randomize so they dump at different moments
+logger = logging.getLogger("coocurrence_count")
+MANY = random.randint(1000,5000) #randomize so they dump at different moments
 
 
 def main():
@@ -113,6 +116,7 @@ class SparseCounter():
         with self.saving_thread_lock:
             if len(self) >= MANY\
             and not self.saving_thread:
+                logger.info('asking for DB dump (records={0})'.format(len(self)))
                 self.saving_thread = Thread(target=self.run_dump)
                 self.saving_thread.start()
                 
@@ -129,17 +133,24 @@ class SparseCounter():
         with self.saving_thread_lock:
             if self.saving_thread:
                 thread_alive = self.saving_thread
-        sys.stderr.write('waiting to write in sparse matrix...\t')
+        logger.info('waiting for unfinished saves to end...\t')
         if thread_alive:
             thread_alive.join()
-        sys.stderr.write('done\n')
+        logger.info('saving thread joined')
     
     def save(self):
         timeout = 60*60*2 #infinite
         con = sqlite3.connect(self.output_db,timeout)
+        con.execute("PRAGMA synchronous=OFF")
+        con.execute("PRAGMA count_changes=OFF")
+        con.execute("PRAGMA journal_mode=MEMORY")
+        con.execute("PRAGMA temp_store=MEMORY")
         con.execute('BEGIN EXCLUSIVE TRANSACTION')
         #database locked, let's lock the sparse_coocurrences
         with self.coocurrences_lock:
+            start=time.clock()
+            N_rec = len(self)
+            logger.info('DB lock acquired (records={0})'.format(N_rec))
             for marker in self.coocurrences.keys():
                 marker_sparse_coocurrences = self.coocurrences[marker]
                 marker_table = '{0}'.format(marker)
@@ -147,19 +158,33 @@ class SparseCounter():
                 con.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
                             "context text, occurrences int, PRIMARY "
                             "KEY(pivot,context))".format(marker_table))
+                cur = con.cur()
+                
+                #collect database values
                 for(w1,w2),c in marker_sparse_coocurrences.iteritems():
-                    query = ("INSERT OR REPLACE INTO {0} VALUES('{1}','{2}', "
-                    "coalesce((select occurrences from {0} WHERE pivot ='{1}' AND "
-                    "context='{2}'),0) + {3})").format(
-                            marker_table, w1.replace("'", "''"), 
-                            w2.replace("'", "''"), c)
-                    try:
-                        con.execute(query)
-                    except sqlite3.OperationalError:
-                        print query
-                        raise
+                    cur.execute("SELECT * FROM {0} WHERE pivot = ? AND "
+                                "context =?".format(marker),(w1,w2))
+                    saved = cur.fetchone()
+                    if saved:
+                        marker_sparse_coocurrences[(w1,w2)] += saved[2]
+                    
+                insert_values = []    
+                for(w1,w2),c in marker_sparse_coocurrences.iteritems():
+
+                    insert_values.append((w1,w2,c))
+                
+                query = "INSERT OR REPLACE INTO {0} VALUES( ?, ? ,?)".format(marker)
+                try:
+                    cur.executemultiple(query, insert_values)
+                except sqlite3.OperationalError:
+                    logger.error("Query Failed: {0)".format(query))
+                    raise
                 #clear from memory
                 del self.coocurrences[marker]
+            
+            end=time.clock()    
+            logger.info('Dumping Finished. Time consumed={0:.2f}s. Rec/s={1:.sf}'\
+                        .format((end-start, N_rec/(end-start))))
         con.commit()
         con.close()
 
