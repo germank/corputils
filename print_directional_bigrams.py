@@ -126,7 +126,7 @@ def build_composition_match_func(word_regexp, pos_regexp, wordset_file):
     if pos_regexp:
         pos_regexp_func = re.compile(pos_regexp, re.I).match
         if match_func:
-            match_func = partial(lambda f, w: f(w) and posregexp_func(w[2]),
+            match_func = partial(lambda f, w: f(w) and pos_regexp_func(w[2]),
                 match_func)
         else:
             match_func = lambda w: pos_regexp_func(w[2])
