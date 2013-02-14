@@ -18,7 +18,7 @@ from threading import Lock, Thread, Condition
 logging.basicConfig(level=logging.INFO)
 MANY = random.randint(10000,50000) #randomize so they dump at different moments
 
-#FIXME: put in unicode openhook=fileinput.hook_encoded("utf-8")
+#FIXME: put in unicode o
 def main():
     parser = argparse.ArgumentParser(description=
         """Takes a file containing "word_i marker word_j" tuples
@@ -68,7 +68,7 @@ def main():
     core = SparseCounter(core_output_db)
     per = SparseCounter(per_output_db)
 
-    for l in fileinput.input(args.input):
+    for l in fileinput.input(args.input, openhook=fileinput.hook_encoded("utf-8")):
         [w1,marker,w2] = l.rstrip('\n').split('\t')
         if args.compose_op in w1:
             tg = w1.split(args.compose_op)[1]
@@ -144,7 +144,7 @@ class SparseCounter():
     
     def save(self):
         timeout = 60*60*2 #infinite
-        con = sqlite3.connect(self.output_db,timeout)
+        con = sqlite3.connect(self.output_db,timeout,isolation_level="EXCLUSIVE")
         con.text_factory = str #FIXME: move to unicode
         con.execute("PRAGMA synchronous=OFF")
         con.execute("PRAGMA count_changes=OFF")
