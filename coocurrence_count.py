@@ -10,12 +10,14 @@ import random
 import numpy as np
 import time
 import logging
+import operator
+from itertools import *
 from datetime import datetime
 from threading import Lock, Thread, Condition
 
 #logger = logging.getLogger("coocurrence_count")
 #logger.setLevel(logging.DEBUG)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 MANY = random.randint(10000,50000) #randomize so they dump at different moments
 
 #FIXME: put in unicode o
@@ -79,7 +81,7 @@ def main():
                 core.count(w1, marker, w2)
 
     sys.stderr.write('\n')
-
+    logging.info("finished counting")
     #wait for any pending saves
     core.join()
     per.join()
@@ -146,39 +148,69 @@ class SparseCounter():
         timeout = 60*60*2 #infinite
         con = sqlite3.connect(self.output_db,timeout,isolation_level="EXCLUSIVE")
         con.text_factory = str #FIXME: move to unicode
-        con.execute("PRAGMA synchronous=OFF")
-        con.execute("PRAGMA count_changes=OFF")
-        con.execute("PRAGMA journal_mode=MEMORY")
-        con.execute("PRAGMA temp_store=MEMORY")
+        lock_time = time.time()
+        cur = con.cursor()
+        #Create tables for each marker before falling into lock
+        #It could become a bug if new markers arise after the tables where
+        #created, but since marker are quite stable it's very unlikely.
+        #The reason for doing this is that the CREATE TABLE frees the lock
+        #and lets other process to take the DB while we where dumping
+        #Any of these firsts queries could lock the DB, but we are not
+        #guaranteed to keep it until we execute the BEGIN EXCLUSIVE
+        with self.coocurrences_lock:
+            for marker in self.coocurrences.keys():
+                marker_table = '{0}'.format(marker)
+                cur.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
+                            "context text, occurrences int, PRIMARY "
+                            "KEY(pivot,context))".format(marker_table))
+        cur.execute("PRAGMA synchronous=OFF")
+        cur.execute("PRAGMA count_changes=OFF")
+        cur.execute("PRAGMA journal_mode=MEMORY")
+        cur.execute("PRAGMA temp_store=MEMORY")
         con.execute('BEGIN EXCLUSIVE TRANSACTION')
+        logging.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
         #database locked, let's lock the sparse_coocurrences
         with self.coocurrences_lock:
             start=time.time()
             N_rec = len(self)
-            logging.info('DB lock acquired (records={0})'.format(N_rec))
+            logging.info('Start dumping {0} records)'.format(N_rec))
             for marker in self.coocurrences.keys():
-                marker_sparse_coocurrences = self.coocurrences[marker]
+                marker_coocurrences = self.coocurrences[marker]
                 marker_table = '{0}'.format(marker)
-                #con.execute("BEGIN EXCLUSIVE TRANSACTION")
-                con.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
-                            "context text, occurrences int, PRIMARY "
-                            "KEY(pivot,context))".format(marker_table))
-                cur = con.cursor()
                 start_op = time.time()
                 #collect database values
-                for(w1,w2),c in marker_sparse_coocurrences.iteritems():
-                    cur.execute("SELECT * FROM {0} WHERE pivot = ? AND "
-                                "context =?".format(marker),(w1,w2))
-                    saved = cur.fetchone()
-                    if saved:
-                        marker_sparse_coocurrences[(w1,w2)] += int(saved[2])
+                batch_size = 100
+                for marker_cooocurrences_chunk in \
+                split_every(batch_size, marker_coocurrences.items()):
+                    params = []
+                    for (w1,w2),c in marker_cooocurrences_chunk:
+                        params.append(w1)
+                        params.append(w2)
+                    select_query = \
+                        "SELECT * FROM {0} WHERE {1}".format(marker_table,
+                        " OR ".join(repeat("(pivot = ? AND context = ?)", 
+                                           len(params)/2)))
+                    cur.execute(select_query, params)
+                    while 1:
+                        saved = cur.fetchone()
+                        if saved:
+                            marker_coocurrences[(saved[0],saved[1])] += int(saved[2])
+                        else:
+                            break
+                    
+                #for(w1,w2),c in marker_coocurrences.iteritems():
+                #    cur.execute("SELECT * FROM {0} WHERE pivot = ? AND "
+                #                "context =?".format(marker),(w1,w2))
+                #    saved = cur.fetchone()
+                #    if saved:
+                #        marker_coocurrences[(w1,w2)] += int(saved[2])
                     
                 insert_values = []    
-                for(w1,w2),c in marker_sparse_coocurrences.iteritems():
+                for(w1,w2),c in marker_coocurrences.iteritems():
                     insert_values.append((w1,w2,c))#"coalesce(select occurrences FROM {0} WHERE pivot = '{1}' and context='{2}',0) + {3}".format(marker,w1.replace("'","''"),w2.replace("'","''"),c)))
                 end_op = time.time()
                 logging.debug('Retrieved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
-                        .format(marker, end_op-start_op, len(marker_sparse_coocurrences)/(end_op-start_op)))
+                        .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 start_op = time.time()
                 query = "INSERT OR REPLACE INTO {0} VALUES( ?, ? ,?)".format(marker)
                 try:
@@ -188,12 +220,12 @@ class SparseCounter():
                     raise
                 end_op = time.time()
                 logging.debug('Saved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
-                        .format(marker, end_op-start_op, len(marker_sparse_coocurrences)/(end_op-start_op)))
+                        .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 #clear from memory
                 del self.coocurrences[marker]
             
             end=time.time()    
-            logging.info('Dumping Finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
+            logging.info('Dumping finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
                         .format(end-start, N_rec/(end-start)))
         con.commit()
         con.close()
@@ -227,6 +259,17 @@ def save_dense_matrix(m, outdir, fname):
         #    current_row += m[i]
         #    l.seek(current_pos)
 
+def split_every(n, iterable):
+    i = iter(iterable)
+    piece = list(islice(i, n))
+    while piece:
+        yield piece
+        piece = list(islice(i, n))
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
 
 
     
