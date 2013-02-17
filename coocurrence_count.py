@@ -18,7 +18,7 @@ from threading import Lock, Thread, Condition
 #logger = logging.getLogger("coocurrence_count")
 #logger.setLevel(logging.DEBUG)
 logging.basicConfig(level=logging.DEBUG)
-MANY = random.randint(10000,50000) #randomize so they dump at different moments
+MANY = float("inf") #500000#random.randint(10000,50000) #randomize so they dump at different moments
 
 #FIXME: put in unicode o
 def main():
@@ -40,7 +40,7 @@ def main():
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
-    sys.stderr.write("Started at {0}\n".format(str(datetime.now())))
+    logging.info("Started at {0}\n".format(str(datetime.now())))
     per_output_db = os.path.join(args.output_dir, 'peripheral.db')
     core_output_db = os.path.join(args.output_dir, 'core.db')
     #make sure outdir exists
@@ -70,31 +70,32 @@ def main():
     core = SparseCounter(core_output_db)
     per = SparseCounter(per_output_db)
 
-    for l in fileinput.input(args.input, openhook=fileinput.hook_encoded("utf-8")):
-        [w1,marker,w2] = l.rstrip('\n').split('\t')
-        if args.compose_op in w1:
-            tg = w1.split(args.compose_op)[1]
-            if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
-                per.count(w1, marker, w2)
-        else:
-            if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
-                core.count(w1, marker, w2)
+    with Timer() as t_counting:
+        for l in fileinput.input(args.input, 
+                                 openhook=fileinput.hook_encoded("utf-8")):
+            [w1,marker,w2] = l.rstrip('\n').split('\t')
+            if args.compose_op in w1:
+                tg = w1.split(args.compose_op)[1]
+                if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
+                    per.count(w1, marker, w2)
+            else:
+                if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
+                    core.count(w1, marker, w2)
 
-    sys.stderr.write('\n')
-    logging.info("finished counting")
+    logging.info("Counting Finished (t={0:.2f})".format(t_counting.interval))
     #wait for any pending saves
     core.join()
     per.join()
     #save residuals
     if len(core)>0:
-        sys.stderr.write('saving core matrix...\t')
+        logging.info('Saving Core Matrix...\t')
         core.save()
-        sys.stderr.write('done\n')
+        logging.info('Finished Saving Core Matrix...\t')
     if len(per)>0:
-        sys.stderr.write('saving peripheral matrix...\t')
+        logging.info('Saving Core Matrix...\t')
         per.save()
-        sys.stderr.write('done\n')
-    sys.stderr.write("Finished at {0}\n".format(str(datetime.now())))
+        logging.info('Finished Saving Core Matrix...\t')
+    logging.info("Finished at {0}\n".format(str(datetime.now())))
         
         
 class SparseCounter():
@@ -104,6 +105,7 @@ class SparseCounter():
         self.saving_thread = None
         self.saving_thread_lock = Lock()
         self.output_db = output_db
+        self.i = 0
     
     def count(self, w1, marker, w2):
         with self.coocurrences_lock:
@@ -113,7 +115,9 @@ class SparseCounter():
             if (w1,w2) not in marker_coocurrences:
                 marker_coocurrences[(w1,w2)] = 0
             marker_coocurrences[(w1,w2)] += 1
-            self.check_dump()
+            if self.i % 1000 == 0:
+                self.check_dump()
+                self.i = 0
     
     def __len__(self):
         return sum([len(mc) for mc in self.coocurrences.itervalues()])
@@ -272,7 +276,14 @@ def chunks(l, n):
         yield l[i:i+n]
 
 
-    
+class Timer:    
+    def __enter__(self):
+        self.start = time.clock()
+        return self
+
+    def __exit__(self, *args):
+        self.end = time.clock()
+        self.interval = self.end - self.start    
 
 if __name__ == '__main__':
     main()
