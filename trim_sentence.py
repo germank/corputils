@@ -12,8 +12,9 @@ def main():
         default="-", nargs='?')
     parser.add_argument('--to-lower', default=False, 
         help='changes lemmas to lowecase', action='store_true')
+    parser.add_argument('--pword', help='pivot pos regexp')
     parser.add_argument('--ppos', help='pivot pos regexp')
-    parser.add_argument('--pwords', help='file with a list of words that '
+    parser.add_argument('--pwordset', help='file with a list of words that '
     'should be kept')
 
     args = parser.parse_args()
@@ -44,12 +45,21 @@ def main():
 
 def get_pivot_filter(args):
     #pick up pivots
-    if args.pwords:
-        pivots = load_words(args.pwords)
+    if args.pwordset:
+        pivots = load_words(args.pwordset)
         is_pivot = lambda w: w[1] in pivots
-    elif args.ppos:
-        pivot_match = re.compile(args.ppos).match
-        is_pivot = lambda w: pivot_match(w[2])
+    elif args.ppos or args.pwords:
+        if args.ppos and args.pwords:
+            word_match = re.compile(args.pwords, re.IGNORECASE).match
+            pos_match = re.compile(args.ppos, re.IGNORECASE).match
+            is_pivot = lambda w: word_match(w[1]) and pos_match(w[2])
+        elif args.ppos:
+            pos_match = re.compile(args.ppos, re.IGNORECASE).match
+            is_pivot = lambda w: pos_match(w[2])
+        else:
+            word_match = re.compile(args.pwords, re.IGNORECASE).match
+            is_pivot = lambda w: word_match(w[1])
+            
     else:
         is_pivot = lambda w: True
     return is_pivot
