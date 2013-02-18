@@ -50,7 +50,8 @@ def main():
     parser.add_argument('-x', '--compose-op', default='<-->')
     parser.add_argument('-c', '--cols')
     parser.add_argument('-r', '--rows')
-    parser.add_argument('--clean', help='Removes all data from database and quits', action='store_true')
+    parser.add_argument('--db-engine', help="One of mysql or sqlite", 
+                        required=True)
     parser.add_argument('--hostname', help='MYSQL hostname', default=MYSQL_HOST)
     parser.add_argument('--user', help='MYSQL username', default=MYSQL_USER)
     parser.add_argument('--passwd', help='MYSQL password', default=MYSQL_PASS)
@@ -83,18 +84,20 @@ def main():
 
     #coocurrences = {}
 
-    db_engine = 'mysql'
-    if db_engine == 'sqlite':
+    if args.db_engine == 'mysql':
         per_output_db = os.path.join(args.output_dir, 'peripheral.db')
         core_output_db = os.path.join(args.output_dir, 'core.db')
-    else:
+        per_dest = MySQLDestination(args.hostname, args.user, args.passwd, 
+                          per_output_db,args.port)
+        core_dest = MySQLDestination(args.hostname, args.user, args.passwd, 
+                          core_output_db,args.port)
+    elif args.db_engine == 'sqlite':
         per_output_db = args.output_dir +  '_peripheral'
         core_output_db = args.output_dir + '_core'
+        per_dest = SqliteDestination(per_output_db)
+        core_dest = SqliteDestination(core_output_db)
         
-    with MySQLDestination(args.hostname, args.user, args.passwd, 
-                          core_output_db,args.port) as core_dest, \
-         MySQLDestination(args.hostname, args.user, args.passwd, 
-                          per_output_db,args.port) as per_dest:
+    with core_dest, per_dest:
         core = SparseCounter(core_dest)
         per = SparseCounter(per_dest)
 
@@ -262,7 +265,7 @@ class MySQLDestination():
 
 class SqliteDestination():
     def __init__(self, output_db):
-        self.output_db
+        self.output_db = output_db
     
     def __str__(self):
         return self.output_db
@@ -295,7 +298,7 @@ class SqliteDestination():
         #database locked, let's lock the sparse_coocurrences
         with counter.coocurrences_lock:
             start=time.time()
-            N_rec = len(self)
+            N_rec = len(counter)
             logger.info('Start dumping {0} records)'.format(N_rec))
             for marker in counter.coocurrences.keys():
                 marker_coocurrences = counter.coocurrences[marker]
