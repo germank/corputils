@@ -1,22 +1,33 @@
 #!/usr/bin/env python
+import logging
+logger = logging.getLogger("coocurrence_count")
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s\t(%(levelname)s): %(message)s",
+                              "%d-%m-%Y %H:%M:%S")
+ch.setFormatter(formatter)
+logger.addHandler(ch)
+
 import argparse
 import fileinput
 import os
 import sqlite3
 import random
 import time
-import logging
+
 import MySQLdb
 from itertools import repeat, islice
 from datetime import datetime
 from threading import Lock, Thread
 from warnings import filterwarnings
+import operator
 filterwarnings('ignore', category = MySQLdb.Warning)
 
 #logger = logging.getLogger("coocurrence_count")
 #logger.setLevel(logging.DEBUG)
+
 logging.basicConfig(level=logging.DEBUG)
-MANY = random.randint(1000000,5000000) #randomize so they dump at different moments
+MANY = 500000#random.randint(1000000,5000000) #randomize so they dump at different moments
 MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
@@ -39,6 +50,7 @@ def main():
     parser.add_argument('-x', '--compose-op', default='<-->')
     parser.add_argument('-c', '--cols')
     parser.add_argument('-r', '--rows')
+    parser.add_argument('--clean', help='Removes all data from database and quits', action='store_true')
     parser.add_argument('--hostname', help='MYSQL hostname', default=MYSQL_HOST)
     parser.add_argument('--user', help='MYSQL username', default=MYSQL_USER)
     parser.add_argument('--passwd', help='MYSQL password', default=MYSQL_PASS)
@@ -47,7 +59,7 @@ def main():
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
-    logging.info("Started at {0}".format(str(datetime.now())))
+    logger.info("Started at {0}".format(str(time.strftime("%d-%m-%Y %H:%M:%S"))))
     #make sure outdir exists
     try:
         os.makedirs(args.output_dir)
@@ -99,9 +111,9 @@ def main():
                         if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
                             core.count(w1, marker, w2)
             except ValueError:
-                logging.error("Error reading line: {0}".format(l))
+                logger.error("Error reading line: {0}".format(l))
     
-        logging.info("Counting Finished (t={0:.2f})".format(t_counting.interval))
+        logger.info("Counting Finished (t={0:.2f})".format(t_counting.interval))
         #wait for any pending saves
         core.join()
         per.join()
@@ -110,7 +122,7 @@ def main():
             core.save()
         if len(per)>0:
             per.save()
-    logging.info("Finished at {0}\n".format(str(datetime.now())))
+    logger.info("Finished at {0}\n".format(str(time.strftime("%d-%m-%Y %H:%M:%S"))))
         
         
 class SparseCounter():
@@ -141,7 +153,7 @@ class SparseCounter():
         with self.saving_thread_lock:
             if len(self) >= MANY\
             and not self.saving_thread:
-                logging.info('asking for DB dump (records={0})'.format(len(self)))
+                logger.info('asking for DB dump (records={0})'.format(len(self)))
                 self.saving_thread = Thread(target=self.run_dump)
                 self.saving_thread.start()
                 
@@ -158,19 +170,19 @@ class SparseCounter():
         with self.saving_thread_lock:
             if self.saving_thread:
                 thread_alive = self.saving_thread
-        logging.info('waiting for unfinished saves to end...\t')
+        logger.info('waiting for unfinished saves to end...\t')
         if thread_alive:
             thread_alive.join()
-        logging.info('saving thread joined')
+        logger.info('saving thread joined')
     
     def save(self):
         N = len(self)
-        logging.info("Saving {0} records to {1}" \
+        logger.info("Saving {0} records to {1}" \
                      .format(N, self.output_destination))
         with Timer() as t_save:
             self.output_destination.save(self.coocurrences, 
                                          self.coocurrences_lock)
-        logging.info("Finished saving records to {0} in {1:.2f} seconds at " 
+        logger.info("Finished saving records to {0} in {1:.2f} seconds at " 
                      "{2:.2f} records/second ".format(self.output_destination,
                                                       t_save.interval, 
                                                       N/t_save.interval))
@@ -203,6 +215,7 @@ class MySQLDestination():
             for marker in coocurrences.keys():
                 marker_coocurrences = coocurrences[marker]
                 marker_table = '{0}'.format(marker)
+                self.conn.begin()
                 self.cur.execute(
                 """CREATE  TABLE IF NOT EXISTS `{0}` (
                   `pivot` VARCHAR(100) NOT NULL ,
@@ -216,10 +229,12 @@ class MySQLDestination():
                     "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
                     .format(marker)
                 
-                insert_values = ((w1,w2,c) for (w1,w2),c in marker_coocurrences.iteritems())
-                self.cur.execute("START TRANSACTION")
+                #sort to avoid deadlocks!
+                insert_values = ((w1,w2,c) for (w1,w2),c in \
+                                sorted(marker_coocurrences.iteritems(),
+                                       key=operator.itemgetter(0)))
                 self.cur.executemany(query, insert_values)
-                self.cur.execute("COMMIT")
+                self.conn.commit()
                 del coocurrences[marker]
 
         
@@ -255,12 +270,12 @@ class SqliteDestination():
         cur.execute("PRAGMA journal_mode=MEMORY")
         cur.execute("PRAGMA temp_store=MEMORY")
         con.execute('BEGIN EXCLUSIVE TRANSACTION')
-        logging.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
+        logger.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
         #database locked, let's lock the sparse_coocurrences
         with coocurrences_lock:
             start=time.time()
             N_rec = len(self)
-            logging.info('Start dumping {0} records)'.format(N_rec))
+            logger.info('Start dumping {0} records)'.format(N_rec))
             for marker in coocurrences.keys():
                 marker_coocurrences = coocurrences[marker]
                 marker_table = '{0}'.format(marker)
@@ -296,23 +311,23 @@ class SqliteDestination():
                 for(w1,w2),c in marker_coocurrences.iteritems():
                     insert_values.append((w1,w2,c))#"coalesce(select occurrences FROM {0} WHERE pivot = '{1}' and context='{2}',0) + {3}".format(marker,w1.replace("'","''"),w2.replace("'","''"),c)))
                 end_op = time.time()
-                logging.debug('Retrieved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
+                logger.debug('Retrieved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
                         .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 start_op = time.time()
                 query = "INSERT OR REPLACE INTO {0} VALUES( ?, ? ,?)".format(marker)
                 try:
                     cur.executemany(query, insert_values)
                 except sqlite3.OperationalError:
-                    logging.error("Query Failed: {0)".format(query))
+                    logger.error("Query Failed: {0)".format(query))
                     raise
                 end_op = time.time()
-                logging.debug('Saved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
+                logger.debug('Saved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
                         .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 #clear from memory
                 del coocurrences[marker]
             
             end=time.time()    
-            logging.info('Dumping finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
+            logger.info('Dumping finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
                         .format(end-start, N_rec/(end-start)))
         con.commit()
         con.close()
