@@ -3,7 +3,7 @@ import logging
 logger = logging.getLogger("coocurrence_count")
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s\t(%(levelname)s): %(message)s",
+formatter = logging.Formatter("%(asctime)s\t%(levelname)s: %(message)s",
                               "%d-%m-%Y %H:%M:%S")
 ch.setFormatter(formatter)
 logger.addHandler(ch)
@@ -176,8 +176,7 @@ class SparseCounter():
         logger.info('saving thread joined')
     
     def save(self):
-        '''Dumps the results to the DB. 
-        IT DOES NOT GUARANTEE SUCESS! i.e. you should try again'''
+        '''Dumps the results to the DB.'''
         N = len(self)
         logger.info("Saving {0} records to {1}" \
                      .format(N, self.output_destination))
@@ -212,10 +211,18 @@ class MySQLDestination():
         return self.output_db
     
     def save(self, counter):
+        #keeps a copy and frees the counter
+        coocurrences_copy = {}
         with counter.coocurrences_lock: 
             for marker in counter.coocurrences.keys():
+                coocurrences_copy[marker] = counter.coocurrences[marker]
+                del counter.coocurrences[marker]
+
+        #repeats in case of deadlock
+        while coocurrences_copy:
+            for marker in counter.coocurrences.keys():
+                marker_coocurrences = coocurrences_copy[marker]             
                 try: 
-                    marker_coocurrences = counter.coocurrences[marker]
                     marker_table = '{0}'.format(marker)
                     self.conn.begin()
                     cur = self.conn.cursor()
@@ -227,7 +234,7 @@ class MySQLDestination():
                       PRIMARY KEY (`pivot`, `context`) ) 
                       ENGINE = InnoDB;""".format(marker_table))
                     
-                    query = "insert delayed into {0} values( %s, %s ,%s) " \
+                    query = "insert into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
                         "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
                         .format(marker)
@@ -239,7 +246,6 @@ class MySQLDestination():
                     cur.executemany(query, insert_values)
                     cur.close()
                     self.conn.commit()
-                    del counter.coocurrences[marker]
                 except MySQLdb.OperationalError, ex:
                     if ex.args[0] == 1213:
                         #deadlock detected
