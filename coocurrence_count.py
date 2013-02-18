@@ -221,8 +221,8 @@ class MySQLDestination():
                     self.conn.begin()
                     self.cur.execute(
                     """CREATE  TABLE IF NOT EXISTS `{0}` (
-                      `pivot` VARCHAR(100) NOT NULL ,
-                      `context` VARCHAR(100) NOT NULL ,
+                      `pivot` VARCHAR(150) NOT NULL ,
+                      `context` VARCHAR(150) NOT NULL ,
                       `occurrences` INT NULL ,
                       PRIMARY KEY (`pivot`, `context`) ) 
                       ENGINE = InnoDB;""".format(marker_table))
@@ -239,10 +239,14 @@ class MySQLDestination():
                     self.cur.executemany(query, insert_values)
                     self.conn.commit()
                     del coocurrences[marker]
-                except MySQLdb.OperationalError:
-                    #shit happens, we'll try again in the future
-                    logger.warning("DEADLOCK while saving marker {0}"\
-                                   .format(marker))
+                except MySQLdb.OperationalError, ex:
+                    if ex.args[0] == 1213:
+                        #deadlock detected
+                        #shit happens, we'll try again in the future
+                        logger.warning("DEADLOCK while saving marker {0}"\
+                                       .format(marker))
+                    else:
+                        raise
 
         
 
