@@ -76,8 +76,8 @@ def main():
         per_output_db = args.output_dir +  '_peripheral'
         core_output_db = args.output_dir + '_core'
         
-    with MySQLDestination(args.host, args.user, args.passwd, core_output_db) as core_dest, \
-         MySQLDestination(args.host, args.user, args.passwd, per_output_db) as per_dest:
+    with MySQLDestination(args.hostname, args.user, args.passwd, core_output_db) as core_dest, \
+         MySQLDestination(args.hostname, args.user, args.passwd, per_output_db) as per_dest:
         core = SparseCounter(core_dest)
         per = SparseCounter(per_dest)
 
