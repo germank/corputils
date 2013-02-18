@@ -20,6 +20,7 @@ MANY = random.randint(1000000,5000000) #randomize so they dump at different mome
 MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
+MYSQL_PORT=3306
 
 #FIXME: put in unicode o
 def main():
@@ -41,6 +42,7 @@ def main():
     parser.add_argument('--hostname', help='MYSQL hostname', default=MYSQL_HOST)
     parser.add_argument('--user', help='MYSQL username', default=MYSQL_USER)
     parser.add_argument('--passwd', help='MYSQL password', default=MYSQL_PASS)
+    parser.add_argument('--port', help='MySQL port', default=MYSQL_PORT)
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
@@ -76,8 +78,10 @@ def main():
         per_output_db = args.output_dir +  '_peripheral'
         core_output_db = args.output_dir + '_core'
         
-    with MySQLDestination(args.hostname, args.user, args.passwd, core_output_db) as core_dest, \
-         MySQLDestination(args.hostname, args.user, args.passwd, per_output_db) as per_dest:
+    with MySQLDestination(args.hostname, args.user, args.passwd, 
+                          core_output_db,args.port) as core_dest, \
+         MySQLDestination(args.hostname, args.user, args.passwd, 
+                          per_output_db,args.port) as per_dest:
         core = SparseCounter(core_dest)
         per = SparseCounter(per_dest)
 
@@ -171,15 +175,16 @@ class SparseCounter():
                                                       N/t_save.interval))
         
 class MySQLDestination():
-    def __init__(self, host, user, passwd, output_db):
+    def __init__(self, host, user, passwd, output_db, port):
         self.output_db = output_db
         self.host = host
         self.user = user
         self.passwd = passwd
+        self.port = port
         
     def __enter__(self):
         self.conn = MySQLdb.connect(host=self.host, user=self.user, 
-                                    passwd=self.passwd)
+                                    passwd=self.passwd, port=self.port)
         self.cur = self.conn.cursor()
         self.cur.execute("CREATE SCHEMA IF NOT EXISTS `{0}` DEFAULT CHARACTER SET utf8 ;".format(self.output_db))
         self.cur.execute("USE {0}".format(self.output_db))
