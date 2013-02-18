@@ -122,7 +122,7 @@ def main():
             core.save()
         while len(per)>0:
             per.save()
-    logger.info("Finished at {0}\n".format(str(time.strftime("%d-%m-%Y %H:%M:%S"))))
+    logger.info("Finished at {0}".format(str(time.strftime("%d-%m-%Y %H:%M:%S"))))
         
         
 class SparseCounter():
@@ -360,7 +360,9 @@ class Timer:
 
     def __exit__(self, *args):
         self.end = time.time()
-        self.interval = self.end - self.start    
+        self.interval = self.end - self.start
+        if self.interval == 0.0: #no zero interval
+            self.interval = 1.0e-10  
 
 if __name__ == '__main__':
     main()
