@@ -1,24 +1,25 @@
 #!/usr/bin/env python
 import argparse
 import fileinput
-import portalocker
 import os
-import sys
-import pickle
 import sqlite3
 import random
-import numpy as np
 import time
 import logging
-import operator
-from itertools import *
+import MySQLdb
+from itertools import repeat, islice
 from datetime import datetime
-from threading import Lock, Thread, Condition
+from threading import Lock, Thread
+from warnings import filterwarnings
+filterwarnings('ignore', category = MySQLdb.Warning)
 
 #logger = logging.getLogger("coocurrence_count")
 #logger.setLevel(logging.DEBUG)
 logging.basicConfig(level=logging.DEBUG)
-MANY = float("inf") #500000#random.randint(10000,50000) #randomize so they dump at different moments
+MANY = random.randint(1000000,5000000) #randomize so they dump at different moments
+MYSQL_HOST='localhost'
+MYSQL_USER='root'
+MYSQL_PASS='root'
 
 #FIXME: put in unicode o
 def main():
@@ -37,12 +38,13 @@ def main():
     parser.add_argument('-x', '--compose-op', default='<-->')
     parser.add_argument('-c', '--cols')
     parser.add_argument('-r', '--rows')
+    parser.add_argument('--hostname', help='MYSQL hostname', default=MYSQL_HOST)
+    parser.add_argument('--user', help='MYSQL username', default=MYSQL_USER)
+    parser.add_argument('--passwd', help='MYSQL password', default=MYSQL_PASS)
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
-    logging.info("Started at {0}\n".format(str(datetime.now())))
-    per_output_db = os.path.join(args.output_dir, 'peripheral.db')
-    core_output_db = os.path.join(args.output_dir, 'core.db')
+    logging.info("Started at {0}".format(str(datetime.now())))
     #make sure outdir exists
     try:
         os.makedirs(args.output_dir)
@@ -66,45 +68,53 @@ def main():
 
     #coocurrences = {}
 
+    db_engine = 'mysql'
+    if db_engine == 'sqlite':
+        per_output_db = os.path.join(args.output_dir, 'peripheral.db')
+        core_output_db = os.path.join(args.output_dir, 'core.db')
+    else:
+        per_output_db = args.output_dir +  '_peripheral'
+        core_output_db = args.output_dir + '_core'
+        
+    with MySQLDestination(args.host, args.user, args.passwd, core_output_db) as core_dest, \
+         MySQLDestination(args.host, args.user, args.passwd, per_output_db) as per_dest:
+        core = SparseCounter(core_dest)
+        per = SparseCounter(per_dest)
+
+        with Timer() as t_counting:
+            try: 
+                for l in fileinput.input(args.input, 
+                                         openhook=fileinput.hook_encoded("utf-8")):
+                    [w1,marker,w2] = l.rstrip('\n').split('\t')
+                    if args.compose_op in w1:
+                        tg = w1.split(args.compose_op)[1]
+                        if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
+                            per.count(w1, marker, w2)
+                    else:
+                        if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
+                            core.count(w1, marker, w2)
+            except ValueError:
+                logging.error("Error reading line: {0}".format(l))
     
-    core = SparseCounter(core_output_db)
-    per = SparseCounter(per_output_db)
-
-    with Timer() as t_counting:
-        for l in fileinput.input(args.input, 
-                                 openhook=fileinput.hook_encoded("utf-8")):
-            [w1,marker,w2] = l.rstrip('\n').split('\t')
-            if args.compose_op in w1:
-                tg = w1.split(args.compose_op)[1]
-                if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
-                    per.count(w1, marker, w2)
-            else:
-                if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
-                    core.count(w1, marker, w2)
-
-    logging.info("Counting Finished (t={0:.2f})".format(t_counting.interval))
-    #wait for any pending saves
-    core.join()
-    per.join()
-    #save residuals
-    if len(core)>0:
-        logging.info('Saving Core Matrix...\t')
-        core.save()
-        logging.info('Finished Saving Core Matrix...\t')
-    if len(per)>0:
-        logging.info('Saving Core Matrix...\t')
-        per.save()
-        logging.info('Finished Saving Core Matrix...\t')
+        logging.info("Counting Finished (t={0:.2f})".format(t_counting.interval))
+        #wait for any pending saves
+        core.join()
+        per.join()
+        #save residuals
+        if len(core)>0:
+            core.save()
+        if len(per)>0:
+            per.save()
     logging.info("Finished at {0}\n".format(str(datetime.now())))
         
         
 class SparseCounter():
-    def __init__(self, output_db):
+    def __init__(self, output_destination):
         self.coocurrences = {}
         self.coocurrences_lock = Lock()
         self.saving_thread = None
         self.saving_thread_lock = Lock()
-        self.output_db = output_db
+        self.output_destination = output_destination
         self.i = 0
     
     def count(self, w1, marker, w2):
@@ -149,6 +159,73 @@ class SparseCounter():
         logging.info('saving thread joined')
     
     def save(self):
+        N = len(self)
+        logging.info("Saving {0} records to {1}" \
+                     .format(N, self.output_destination))
+        with Timer() as t_save:
+            self.output_destination.save(self.coocurrences, 
+                                         self.coocurrences_lock)
+        logging.info("Finished saving records to {0} in {1:.2f} seconds at " 
+                     "{2:.2f} records/second ".format(self.output_destination,
+                                                      t_save.interval, 
+                                                      N/t_save.interval))
+        
+class MySQLDestination():
+    def __init__(self, host, user, passwd, output_db):
+        self.output_db = output_db
+        self.host = host
+        self.user = user
+        self.passwd = passwd
+        
+    def __enter__(self):
+        self.conn = MySQLdb.connect(host=self.host, user=self.user, 
+                                    passwd=self.passwd)
+        self.cur = self.conn.cursor()
+        self.cur.execute("CREATE SCHEMA IF NOT EXISTS `{0}` DEFAULT CHARACTER SET utf8 ;".format(self.output_db))
+        self.cur.execute("USE {0}".format(self.output_db))
+        self.cur.execute("SET autocommit = 0;")
+        return self
+
+    def __exit__(self, *args):
+        self.conn.close()
+        
+    def __str__(self):
+        return self.output_db
+    
+    def save(self, coocurrences, coocurrences_lock):
+        with coocurrences_lock:
+            for marker in coocurrences.keys():
+                marker_coocurrences = coocurrences[marker]
+                marker_table = '{0}'.format(marker)
+                self.cur.execute(
+                """CREATE  TABLE IF NOT EXISTS `{0}` (
+                  `pivot` VARCHAR(100) NOT NULL ,
+                  `context` VARCHAR(100) NOT NULL ,
+                  `occurrences` INT NULL ,
+                  PRIMARY KEY (`pivot`, `context`) ) 
+                  ENGINE = InnoDB;""".format(marker_table))
+                
+                query = "insert into {0} values( %s, %s ,%s) " \
+                    "on duplicate key update "\
+                    "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
+                    .format(marker)
+                
+                insert_values = ((w1,w2,c) for (w1,w2),c in marker_coocurrences.iteritems())
+                self.cur.execute("START TRANSACTION")
+                self.cur.executemany(query, insert_values)
+                self.cur.execute("COMMIT")
+                del coocurrences[marker]
+
+        
+
+class SqliteDestination():
+    def __init__(self, output_db):
+        self.output_db
+    
+    def __str__(self):
+        return self.output_db
+    
+    def save(self, coocurrences, coocurrences_lock):
         timeout = 60*60*2 #infinite
         con = sqlite3.connect(self.output_db,timeout,isolation_level="EXCLUSIVE")
         con.text_factory = str #FIXME: move to unicode
@@ -161,8 +238,8 @@ class SparseCounter():
         #and lets other process to take the DB while we where dumping
         #Any of these firsts queries could lock the DB, but we are not
         #guaranteed to keep it until we execute the BEGIN EXCLUSIVE
-        with self.coocurrences_lock:
-            for marker in self.coocurrences.keys():
+        with coocurrences_lock:
+            for marker in coocurrences.keys():
                 marker_table = '{0}'.format(marker)
                 cur.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
                             "context text, occurrences int, PRIMARY "
@@ -174,12 +251,12 @@ class SparseCounter():
         con.execute('BEGIN EXCLUSIVE TRANSACTION')
         logging.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
         #database locked, let's lock the sparse_coocurrences
-        with self.coocurrences_lock:
+        with coocurrences_lock:
             start=time.time()
             N_rec = len(self)
             logging.info('Start dumping {0} records)'.format(N_rec))
-            for marker in self.coocurrences.keys():
-                marker_coocurrences = self.coocurrences[marker]
+            for marker in coocurrences.keys():
+                marker_coocurrences = coocurrences[marker]
                 marker_table = '{0}'.format(marker)
                 start_op = time.time()
                 #collect database values
@@ -226,42 +303,19 @@ class SparseCounter():
                 logging.debug('Saved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
                         .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 #clear from memory
-                del self.coocurrences[marker]
+                del coocurrences[marker]
             
             end=time.time()    
             logging.info('Dumping finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
                         .format(end-start, N_rec/(end-start)))
         con.commit()
         con.close()
-
     
-def save_dense_matrix(m, outdir, fname):
-    outfile = os.path.join(outdir, fname)
-    #make sure fname exists
-    with open(outfile, 'a'):
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
         pass
-    #save matrix
-    with open(outfile, 'r+') as fout:
-        portalocker.lock(fout, portalocker.LOCK_EX)
-        not_empty = fout.read(1)
-        fout.seek(0)
-        if not_empty:
-            curr_mat = pickle.load(fout)
-            m += curr_mat
-            fout.seek(0)
-        pickle.dump(m, fout)
-        
-        #dumb idea
-        #for i in xrange(m.shape[0]):
-        #    current_pos = fout.tell()
-        #    l = fout.readline()
-        #    if l:
-        #        current_row = np.array(l.split('\t'))
-        #        assert len(current_row) == m.shape[1]
-        #    else:
-        #        current_row = np.zeros(m.shape[1])
-        #    current_row += m[i]
-        #    l.seek(current_pos)
 
 def split_every(n, iterable):
     i = iter(iterable)
@@ -269,20 +323,15 @@ def split_every(n, iterable):
     while piece:
         yield piece
         piece = list(islice(i, n))
-def chunks(l, n):
-    """ Yield successive n-sized chunks from l.
-    """
-    for i in xrange(0, len(l), n):
-        yield l[i:i+n]
 
 
 class Timer:    
     def __enter__(self):
-        self.start = time.clock()
+        self.start = time.time()
         return self
 
     def __exit__(self, *args):
-        self.end = time.clock()
+        self.end = time.time()
         self.interval = self.end - self.start    
 
 if __name__ == '__main__':
