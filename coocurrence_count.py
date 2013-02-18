@@ -224,7 +224,7 @@ class MySQLDestination():
                 marker_coocurrences = coocurrences_copy[marker]             
                 try: 
                     marker_table = '{0}'.format(marker)
-                    self.conn.begin()
+                    #self.conn.begin()
                     cur = self.conn.cursor()
                     cur.execute(
                     """CREATE  TABLE IF NOT EXISTS `{0}` (
