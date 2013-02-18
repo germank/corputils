@@ -182,8 +182,7 @@ class SparseCounter():
         logger.info("Saving {0} records to {1}" \
                      .format(N, self.output_destination))
         with Timer() as t_save:
-            self.output_destination.save(self.coocurrences, 
-                                         self.coocurrences_lock)
+            self.output_destination.save(self)
         logger.info("Finished saving records to {0} in {1:.2f} seconds at " 
                      "{2:.2f} records/second ".format(self.output_destination,
                                                       t_save.interval, 
@@ -212,11 +211,11 @@ class MySQLDestination():
     def __str__(self):
         return self.output_db
     
-    def save(self, coocurrences, coocurrences_lock):
-        with coocurrences_lock: 
-            for marker in coocurrences.keys():
+    def save(self, counter):
+        with counter.coocurrences_lock: 
+            for marker in counter.coocurrences.keys():
                 try: 
-                    marker_coocurrences = coocurrences[marker]
+                    marker_coocurrences = counter.coocurrences[marker]
                     marker_table = '{0}'.format(marker)
                     self.conn.begin()
                     cur = self.conn.cursor()
@@ -228,7 +227,7 @@ class MySQLDestination():
                       PRIMARY KEY (`pivot`, `context`) ) 
                       ENGINE = InnoDB;""".format(marker_table))
                     
-                    query = "insert into {0} values( %s, %s ,%s) " \
+                    query = "insert delayed into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
                         "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
                         .format(marker)
@@ -240,7 +239,7 @@ class MySQLDestination():
                     cur.executemany(query, insert_values)
                     cur.close()
                     self.conn.commit()
-                    del coocurrences[marker]
+                    del counter.coocurrences[marker]
                 except MySQLdb.OperationalError, ex:
                     if ex.args[0] == 1213:
                         #deadlock detected
@@ -259,7 +258,7 @@ class SqliteDestination():
     def __str__(self):
         return self.output_db
     
-    def save(self, coocurrences, coocurrences_lock):
+    def save(self, counter):
         timeout = 60*60*2 #infinite
         con = sqlite3.connect(self.output_db,timeout,isolation_level="EXCLUSIVE")
         con.text_factory = str #FIXME: move to unicode
@@ -272,8 +271,8 @@ class SqliteDestination():
         #and lets other process to take the DB while we where dumping
         #Any of these firsts queries could lock the DB, but we are not
         #guaranteed to keep it until we execute the BEGIN EXCLUSIVE
-        with coocurrences_lock:
-            for marker in coocurrences.keys():
+        with counter.coocurrences_lock:
+            for marker in counter.coocurrences.keys():
                 marker_table = '{0}'.format(marker)
                 cur.execute("CREATE TABLE IF NOT EXISTS {0}(pivot text, "
                             "context text, occurrences int, PRIMARY "
@@ -285,12 +284,12 @@ class SqliteDestination():
         con.execute('BEGIN EXCLUSIVE TRANSACTION')
         logger.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
         #database locked, let's lock the sparse_coocurrences
-        with coocurrences_lock:
+        with counter.coocurrences_lock:
             start=time.time()
             N_rec = len(self)
             logger.info('Start dumping {0} records)'.format(N_rec))
-            for marker in coocurrences.keys():
-                marker_coocurrences = coocurrences[marker]
+            for marker in counter.coocurrences.keys():
+                marker_coocurrences = counter.coocurrences[marker]
                 marker_table = '{0}'.format(marker)
                 start_op = time.time()
                 #collect database values
@@ -337,7 +336,7 @@ class SqliteDestination():
                 logger.debug('Saved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
                         .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 #clear from memory
-                del coocurrences[marker]
+                del counter.coocurrences[marker]
             
             end=time.time()    
             logger.info('Dumping finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
