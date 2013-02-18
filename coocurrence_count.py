@@ -27,7 +27,7 @@ filterwarnings('ignore', category = MySQLdb.Warning)
 #logger.setLevel(logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
-MANY = random.randint(100000,500000) #randomize so they dump at different moments
+MANY = random.randint(10000,50000) #randomize so they dump at different moments
 MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
