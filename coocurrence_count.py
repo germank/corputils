@@ -237,7 +237,7 @@ class MySQLDestination():
                       `context` VARCHAR(150) NOT NULL ,
                       `occurrences` INT NULL ,
                       PRIMARY KEY (`pivot`, `context`) ) 
-                      ENGINE = MyISAM;""".format(marker_table))
+                      ENGINE = InnoDB;""".format(marker_table))
                     
                     query = "insert into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
