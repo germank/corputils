@@ -32,7 +32,7 @@ MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
 MYSQL_PORT=3306
-
+BATCH_SIZE = 5000
 #FIXME: put in unicode o
 def main():
     parser = argparse.ArgumentParser(description=
@@ -237,7 +237,7 @@ class MySQLDestination():
                       `context` VARCHAR(150) NOT NULL ,
                       `occurrences` INT NULL ,
                       PRIMARY KEY (`pivot`, `context`) ) 
-                      ENGINE = InnoDB;""".format(marker_table))
+                      ENGINE = MyISAM;""".format(marker_table))
                     
                     query = "insert into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
@@ -248,7 +248,9 @@ class MySQLDestination():
                     insert_values = ((w1,w2,c) for (w1,w2),c in \
                                     sorted(marker_coocurrences.iteritems(),
                                            key=operator.itemgetter(0)))
-                    cur.executemany(query, insert_values)
+                    for insert_values_chunk in \
+                        split_every(BATCH_SIZE, insert_values):
+                        cur.executemany(query, insert_values_chunk)
                     self.conn.commit()
                     del coocurrences_copy[marker]
                 except MySQLdb.OperationalError, ex:
@@ -305,9 +307,8 @@ class SqliteDestination():
                 marker_table = '{0}'.format(marker)
                 start_op = time.time()
                 #collect database values
-                batch_size = 100
                 for marker_cooocurrences_chunk in \
-                split_every(batch_size, marker_coocurrences.items()):
+                split_every(BATCH_SIZE, marker_coocurrences.items()):
                     params = []
                     for (w1,w2),c in marker_cooocurrences_chunk:
                         params.append(w1)
