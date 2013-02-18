@@ -220,11 +220,12 @@ class MySQLDestination():
 
         #repeats in case of deadlock
         while coocurrences_copy:
-            for marker in counter.coocurrences.keys():
+            for marker in coocurrences_copy.keys():
                 marker_coocurrences = coocurrences_copy[marker]             
                 try: 
                     marker_table = '{0}'.format(marker)
                     #self.conn.begin()
+                    
                     cur = self.conn.cursor()
                     cur.execute(
                     """CREATE  TABLE IF NOT EXISTS `{0}` (
@@ -246,6 +247,7 @@ class MySQLDestination():
                     cur.executemany(query, insert_values)
                     cur.close()
                     self.conn.commit()
+                    del coocurrences_copy[marker]
                 except MySQLdb.OperationalError, ex:
                     if ex.args[0] == 1213:
                         #deadlock detected
