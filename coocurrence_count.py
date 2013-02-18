@@ -85,15 +85,15 @@ def main():
     #coocurrences = {}
 
     if args.db_engine == 'mysql':
-        per_output_db = os.path.join(args.output_dir, 'peripheral.db')
-        core_output_db = os.path.join(args.output_dir, 'core.db')
+        per_output_db = args.output_dir +  '_peripheral'
+        core_output_db = args.output_dir + '_core'
         per_dest = MySQLDestination(args.hostname, args.user, args.passwd, 
                           per_output_db,args.port)
         core_dest = MySQLDestination(args.hostname, args.user, args.passwd, 
                           core_output_db,args.port)
     elif args.db_engine == 'sqlite':
-        per_output_db = args.output_dir +  '_peripheral'
-        core_output_db = args.output_dir + '_core'
+        per_output_db = os.path.join(args.output_dir, 'peripheral.db')
+        core_output_db = os.path.join(args.output_dir, 'core.db')
         per_dest = SqliteDestination(per_output_db)
         core_dest = SqliteDestination(core_output_db)
         
