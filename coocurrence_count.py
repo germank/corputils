@@ -42,7 +42,8 @@ def main():
     parser.add_argument('--hostname', help='MYSQL hostname', default=MYSQL_HOST)
     parser.add_argument('--user', help='MYSQL username', default=MYSQL_USER)
     parser.add_argument('--passwd', help='MYSQL password', default=MYSQL_PASS)
-    parser.add_argument('--port', help='MySQL port', default=MYSQL_PORT)
+    parser.add_argument('--port', help='MySQL port', default=MYSQL_PORT, 
+                        type=int)
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
