@@ -254,7 +254,9 @@ class MySQLDestination():
                     self.conn.commit()
                     del coocurrences_copy[marker]
                 except MySQLdb.OperationalError, ex:
-                    if ex.args[0] == 1213:
+                    #1213:deadlock detected
+                    #1205: lock timeout
+                    if ex.args[0] == 1213 or ex.args[0] == 1205:
                         #deadlock detected
                         #shit happens, we'll try again in the future
                         logger.warning("DEADLOCK while saving marker {0}"\
