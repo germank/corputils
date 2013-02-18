@@ -27,7 +27,7 @@ filterwarnings('ignore', category = MySQLdb.Warning)
 #logger.setLevel(logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
-MANY = random.randint(10000,50000) #randomize so they dump at different moments
+MANY = random.randint(2500,7500) #randomize so they dump at different moments
 MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
@@ -240,17 +240,16 @@ class MySQLDestination():
                     query = "insert into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
                         "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
-                        .format(marker)
+                        .format(marker_table)
                     
                     #sort to avoid deadlocks!
                     insert_values = ((w1,w2,c) for (w1,w2),c in \
                                     sorted(marker_coocurrences.iteritems(),
                                            key=operator.itemgetter(0)))
-                    for insert_values_chunk in \
-                        split_every(BATCH_SIZE, insert_values):
-                        self.conn.begin()
-                        cur.executemany(query, insert_values_chunk)
-                        self.conn.commit()
+
+                    self.conn.begin()
+                    cur.executemany(query, insert_values)
+                    self.conn.commit()
                     del coocurrences_copy[marker]
                 except MySQLdb.OperationalError, ex:
                     #1213:deadlock detected
