@@ -237,7 +237,7 @@ class MySQLDestination():
                 marker_coocurrences = coocurrences_copy[marker]             
                 try: 
                     marker_table = '{0}'.format(marker)
-                    query = "insert into {0} values( %s, %s ,%s) " \
+                    query = "insert delayed into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
                         "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
                         .format(marker_table)
