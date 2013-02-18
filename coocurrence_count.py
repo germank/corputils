@@ -87,10 +87,10 @@ def main():
     if args.db_engine == 'mysql':
         per_output_db = args.output_dir +  '_peripheral'
         core_output_db = args.output_dir + '_core'
-        per_dest = MySQLDestination(args.hostname, args.user, args.passwd, 
-                          per_output_db,args.port)
-        core_dest = MySQLDestination(args.hostname, args.user, args.passwd, 
-                          core_output_db,args.port)
+        per_dest = MySQLDestination(args.hostname, args.port, args.user, args.passwd, 
+                          per_output_db, ['cc'])
+        core_dest = MySQLDestination(args.hostname, args.port, args.user, args.passwd, 
+                          core_output_db, ['cc'])
     elif args.db_engine == 'sqlite':
         per_output_db = os.path.join(args.output_dir, 'peripheral.db')
         core_output_db = os.path.join(args.output_dir, 'core.db')
@@ -191,8 +191,9 @@ class SparseCounter():
                                                       N/t_save.interval))
         
 class MySQLDestination():
-    def __init__(self, host, user, passwd, output_db, port):
+    def __init__(self, host, port, user, passwd, output_db, tables ):
         self.output_db = output_db
+        self.tables = tables
         self.host = host
         self.user = user
         self.passwd = passwd
@@ -205,6 +206,14 @@ class MySQLDestination():
         cur.execute("CREATE SCHEMA IF NOT EXISTS `{0}` DEFAULT CHARACTER SET utf8 ;".format(self.output_db))
         cur.execute("USE {0}".format(self.output_db))
         cur.execute("SET autocommit = 0;")
+        for table in self.tables:
+            cur.execute(
+                    """CREATE  TABLE IF NOT EXISTS `{0}` (
+                      `pivot` VARCHAR(150) NOT NULL ,
+                      `context` VARCHAR(150) NOT NULL ,
+                      `occurrences` INT NULL ,
+                      PRIMARY KEY (`pivot`, `context`) ) 
+                      ENGINE = InnoDB;""".format(table))
         return self
 
     def __exit__(self, *args):
@@ -228,17 +237,6 @@ class MySQLDestination():
                 marker_coocurrences = coocurrences_copy[marker]             
                 try: 
                     marker_table = '{0}'.format(marker)
-                    self.conn.begin()
-                    
-                    
-                    cur.execute(
-                    """CREATE  TABLE IF NOT EXISTS `{0}` (
-                      `pivot` VARCHAR(150) NOT NULL ,
-                      `context` VARCHAR(150) NOT NULL ,
-                      `occurrences` INT NULL ,
-                      PRIMARY KEY (`pivot`, `context`) ) 
-                      ENGINE = InnoDB;""".format(marker_table))
-                    
                     query = "insert into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
                         "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
@@ -250,8 +248,9 @@ class MySQLDestination():
                                            key=operator.itemgetter(0)))
                     for insert_values_chunk in \
                         split_every(BATCH_SIZE, insert_values):
+                        self.conn.begin()
                         cur.executemany(query, insert_values_chunk)
-                    self.conn.commit()
+                        self.conn.commit()
                     del coocurrences_copy[marker]
                 except MySQLdb.OperationalError, ex:
                     #1213:deadlock detected
