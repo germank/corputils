@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import logging
-from mysql.connector.errors import OperationalError
 logger = logging.getLogger("coocurrence_count")
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
@@ -240,7 +239,7 @@ class MySQLDestination():
                     self.cur.executemany(query, insert_values)
                     self.conn.commit()
                     del coocurrences[marker]
-                except OperationalError:
+                except MySQLdb.OperationalError:
                     #shit happens, we'll try again in the future
                     logger.warning("DEADLOCK while saving marker {0}"\
                                    .format(marker))
