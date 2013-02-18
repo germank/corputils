@@ -48,16 +48,16 @@ def get_pivot_filter(args):
     if args.pwordset:
         pivots = load_words(args.pwordset)
         is_pivot = lambda w: w[1] in pivots
-    elif args.ppos or args.pwords:
-        if args.ppos and args.pwords:
-            word_match = re.compile(args.pwords, re.IGNORECASE).match
+    elif args.ppos or args.pword:
+        if args.ppos and args.pword:
+            word_match = re.compile(args.pword, re.IGNORECASE).match
             pos_match = re.compile(args.ppos, re.IGNORECASE).match
             is_pivot = lambda w: word_match(w[1]) and pos_match(w[2])
         elif args.ppos:
             pos_match = re.compile(args.ppos, re.IGNORECASE).match
             is_pivot = lambda w: pos_match(w[2])
         else:
-            word_match = re.compile(args.pwords, re.IGNORECASE).match
+            word_match = re.compile(args.pword, re.IGNORECASE).match
             is_pivot = lambda w: word_match(w[1])
             
     else:
