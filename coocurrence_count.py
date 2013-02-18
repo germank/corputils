@@ -200,10 +200,10 @@ class MySQLDestination():
     def __enter__(self):
         self.conn = MySQLdb.connect(host=self.host, user=self.user, 
                                     passwd=self.passwd, port=self.port)
-        self.cur = self.conn.cursor()
-        self.cur.execute("CREATE SCHEMA IF NOT EXISTS `{0}` DEFAULT CHARACTER SET utf8 ;".format(self.output_db))
-        self.cur.execute("USE {0}".format(self.output_db))
-        self.cur.execute("SET autocommit = 0;")
+        cur = self.conn.cursor()
+        cur.execute("CREATE SCHEMA IF NOT EXISTS `{0}` DEFAULT CHARACTER SET utf8 ;".format(self.output_db))
+        cur.execute("USE {0}".format(self.output_db))
+        cur.execute("SET autocommit = 0;")
         return self
 
     def __exit__(self, *args):
@@ -219,7 +219,8 @@ class MySQLDestination():
                     marker_coocurrences = coocurrences[marker]
                     marker_table = '{0}'.format(marker)
                     self.conn.begin()
-                    self.cur.execute(
+                    cur = self.conn.cursor()
+                    cur.execute(
                     """CREATE  TABLE IF NOT EXISTS `{0}` (
                       `pivot` VARCHAR(150) NOT NULL ,
                       `context` VARCHAR(150) NOT NULL ,
@@ -236,7 +237,8 @@ class MySQLDestination():
                     insert_values = ((w1,w2,c) for (w1,w2),c in \
                                     sorted(marker_coocurrences.iteritems(),
                                            key=operator.itemgetter(0)))
-                    self.cur.executemany(query, insert_values)
+                    cur.executemany(query, insert_values)
+                    cur.close()
                     self.conn.commit()
                     del coocurrences[marker]
                 except MySQLdb.OperationalError, ex:
