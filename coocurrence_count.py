@@ -27,7 +27,7 @@ filterwarnings('ignore', category = MySQLdb.Warning)
 #logger.setLevel(logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
-MANY = 5000 #float("inf")
+MANY = float("inf")
 MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
