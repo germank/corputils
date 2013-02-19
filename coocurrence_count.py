@@ -1,13 +1,10 @@
 #!/usr/bin/env python
 import logging
-logger = logging.getLogger("coocurrence_count")
-logger.setUseParentHandlers(False);
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter("%(asctime)s\t%(levelname)s: %(message)s",
-                              "%d-%m-%Y %H:%M:%S")
-ch.setFormatter(formatter)
-logger.addHandler(ch)
+LOGGING_FORMAT="%(asctime)s\t%(levelname)s: %(message)s"
+LOGGING_DATE_FORMAT="%d-%m-%Y %H:%M:%S"
+logging.basicConfig(format=LOGGING_FORMAT, datefmt=LOGGING_DATE_FORMAT, 
+                    level=logging.DEBUG)
+logger = logging.getLogger()
 
 import argparse
 import fileinput
