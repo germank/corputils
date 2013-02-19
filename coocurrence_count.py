@@ -145,8 +145,8 @@ class SparseCounter():
             if (w1,w2) not in marker_coocurrences:
                 marker_coocurrences[(w1,w2)] = 0
             marker_coocurrences[(w1,w2)] += 1
-            if self.i % 1000 == 0:
-                self.check_dump()
+            if self.i % 100 == 0:
+                self.check_dump_sync()
                 self.i = 0
     
     def __len__(self):
@@ -159,6 +159,10 @@ class SparseCounter():
                 logger.info('asking for DB dump (records={0})'.format(len(self)))
                 self.saving_thread = Thread(target=self.run_dump)
                 self.saving_thread.start()
+    
+    def check_dump_sync(self):
+        if len(self) >= MANY:
+            self.save()
                 
     def run_dump(self):
         '''main for the saving thread'''
@@ -237,7 +241,7 @@ class MySQLDestination():
                 marker_coocurrences = coocurrences_copy[marker]             
                 try: 
                     marker_table = '{0}'.format(marker)
-                    query = "insert delayed into {0} values( %s, %s ,%s) " \
+                    query = "insert into {0} values( %s, %s ,%s) " \
                         "on duplicate key update "\
                         "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
                         .format(marker_table)
