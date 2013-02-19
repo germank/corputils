@@ -10,13 +10,12 @@ import argparse
 import fileinput
 import os
 import sqlite3
-import random
 import time
+import portalocker
 
 import MySQLdb
 from itertools import repeat, islice
-from datetime import datetime
-from threading import Lock, Thread, RLock
+from threading import Thread, RLock
 from warnings import filterwarnings
 import operator
 filterwarnings('ignore', category = MySQLdb.Warning)
@@ -54,8 +53,8 @@ def main():
                         'start dumping', type=int, default=MANY)
     parser.add_argument('-b','--batch-size', help='size of batchs inserted '
                         'into the DB', type=int, default=BATCH_SIZE)
-    parser.add_argument('-e', '--db-engine', help="One of mysql or sqlite", 
-                        required=True)
+    parser.add_argument('-e', '--db-engine', help="Destination format", 
+                        choices=['mysql', 'sqlite', 'text'], required=True)
     parser.add_argument('-u', '--mysql_user', help='MYSQL username', default=MYSQL_USER)
     parser.add_argument('-p', '--mysql_passwd', help='MYSQL password', default=MYSQL_PASS)
     parser.add_argument('-H', '--mysql_hostname', help='MYSQL hostname', default=MYSQL_HOST)
@@ -107,6 +106,11 @@ def main():
         core_output_db = os.path.join(args.output_dir, 'core.db')
         per_dest = SqliteDestination(per_output_db, args.batch_size)
         core_dest = SqliteDestination(core_output_db, args.batch_size)
+    elif args.db_engine == 'text':
+        per_output_db = os.path.join(args.output_dir, 'peripheral')
+        core_output_db = os.path.join(args.output_dir, 'core')
+        per_dest = TextDestination(per_output_db, args.batch_size)
+        core_dest = TextDestination(core_output_db, args.batch_size)
         
     with core_dest, per_dest:
         core = SparseCounter(core_dest, args.many)
@@ -118,7 +122,7 @@ def main():
                                          openhook=fileinput.hook_encoded("utf-8")):
                     [w1,marker,w2] = l.rstrip('\n').split('\t')
                     if args.compose_op in w1:
-                        tg = w1.split(args.compose_op)[1]
+                        #tg = w1.split(args.compose_op)[1]
                         #if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
                         per.count(w1, marker, w2)
                     else:
@@ -290,6 +294,46 @@ class MySQLDestination():
                     del coocurrences_copy[marker]
         cur.close()
 
+class TextDestination():
+    def __init__(self, output_folder):
+        self.output_folder  = output_folder
+        
+    def __enter__(self):
+        #ensures file exists
+        try:
+            os.makedirs(self.output_folder)
+        except OSError:
+            #ok
+            pass
+        return self
+
+    def __exit__(self, *args):
+        pass
+    
+    def __str__(self):
+        return self.output_file
+    
+    def save(self, counter):
+        #keeps a copy and frees the counter
+        coocurrences_copy = {}
+        with counter.coocurrences_lock:
+            for marker in counter.coocurrences.keys():
+                coocurrences_copy[marker] = counter.coocurrences[marker]
+                del counter.coocurrences[marker]
+
+        #repeats in case of deadlock
+        for marker in coocurrences_copy.keys():
+            marker_coocurrences = coocurrences_copy[marker]             
+            marker_file = os.path.join(self.output_folder, marker)
+            
+            insert_values = ((w1,w2,c) for (w1,w2),c in \
+                            sorted(marker_coocurrences.iteritems(),
+                                   key=operator.itemgetter(0)))
+            with portalocker.Lock(marker_file) as out:
+                for values in insert_values:
+                    out.write('{0}\t{1}\t{2}\n'.format(*values))
+            del coocurrences_copy[marker]
+
         
 
 class SqliteDestination():
@@ -321,7 +365,7 @@ class SqliteDestination():
                             "KEY(pivot,context))".format(marker_table))
         cur.execute("PRAGMA synchronous=OFF")
         cur.execute("PRAGMA count_changes=OFF")
-        cur.execute("PRAGMA journal_mode=MEMORY")
+        cur.execute("PRAGMA journal_mode=OFF")
         cur.execute("PRAGMA temp_store=MEMORY")
         con.execute('BEGIN EXCLUSIVE TRANSACTION')
         logger.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
@@ -348,7 +392,12 @@ class SqliteDestination():
                     while 1:
                         saved = cur.fetchone()
                         if saved:
-                            marker_coocurrences[(saved[0],saved[1])] += int(saved[2])
+                            try:                            
+                                marker_coocurrences[(saved[0],saved[1])] += \
+                                    int(saved[2])
+                            except KeyError:
+                                logger.error("{0} obtained while executing {1}"\
+                                             .format(str(saved)), select_query)
                         else:
                             break
                     
