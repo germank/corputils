@@ -109,8 +109,8 @@ def main():
     elif args.db_engine == 'text':
         per_output_db = os.path.join(args.output_dir, 'peripheral')
         core_output_db = os.path.join(args.output_dir, 'core')
-        per_dest = TextDestination(per_output_db, args.batch_size)
-        core_dest = TextDestination(core_output_db, args.batch_size)
+        per_dest = TextDestination(per_output_db)
+        core_dest = TextDestination(core_output_db)
         
     with core_dest, per_dest:
         core = SparseCounter(core_dest, args.many)
@@ -311,7 +311,7 @@ class TextDestination():
         pass
     
     def __str__(self):
-        return self.output_file
+        return self.output_folder
     
     def save(self, counter):
         #keeps a copy and frees the counter
@@ -329,7 +329,7 @@ class TextDestination():
             insert_values = ((w1,w2,c) for (w1,w2),c in \
                             sorted(marker_coocurrences.iteritems(),
                                    key=operator.itemgetter(0)))
-            with portalocker.Lock(marker_file) as out:
+            with portalocker.Lock(marker_file, truncate=None) as out:
                 for values in insert_values:
                     out.write('{0}\t{1}\t{2}\n'.format(*values))
             del coocurrences_copy[marker]
