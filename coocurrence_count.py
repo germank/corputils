@@ -32,7 +32,7 @@ MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
 MYSQL_PORT=3306
-BATCH_SIZE = 5000
+BATCH_SIZE = 100
 #FIXME: put in unicode o
 def main():
     parser = argparse.ArgumentParser(description=
