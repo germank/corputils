@@ -51,9 +51,9 @@ def main():
 #    parser.add_argument('-c', '--cols')
 #    parser.add_argument('-r', '--rows')
     parser.add_argument('-m', '--many', help='number of records needed to '
-                        'start dumping', default=MANY)
+                        'start dumping', type=int, default=MANY)
     parser.add_argument('-b','--batch-size', help='size of batchs inserted '
-                        'into the DB', default=BATCH_SIZE)
+                        'into the DB', type=int, default=BATCH_SIZE)
     parser.add_argument('-e', '--db-engine', help="One of mysql or sqlite", 
                         required=True)
     parser.add_argument('-u', '--mysql_user', help='MYSQL username', default=MYSQL_USER)
