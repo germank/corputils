@@ -27,7 +27,7 @@ filterwarnings('ignore', category = MySQLdb.Warning)
 #logger.setLevel(logging.DEBUG)
 
 logging.basicConfig(level=logging.DEBUG)
-MANY = random.randint(2500,7500) #randomize so they dump at different moments
+MANY = 5000 #float("inf")
 MYSQL_HOST='localhost'
 MYSQL_USER='root'
 MYSQL_PASS='root'
@@ -44,43 +44,56 @@ def main():
     
     parser.add_argument('input', help="coocurrence tuples", default="-",
         nargs='*')
+    parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('-o', '--output_dir', 
         help="directory where a coocurrence count file will be created "
         "for each pattern", required=True)
-    parser.add_argument('-x', '--compose-op', default='<-->')
-    parser.add_argument('-c', '--cols')
-    parser.add_argument('-r', '--rows')
-    parser.add_argument('--db-engine', help="One of mysql or sqlite", 
+    parser.add_argument('-x', '--compose-op', help='string using to identify'
+    ' a peripheral space token', default='<-->')
+#    parser.add_argument('-c', '--cols')
+#    parser.add_argument('-r', '--rows')
+    parser.add_argument('-m', '--many', help='number of records needed to '
+                        'start dumping', default=MANY)
+    parser.add_argument('-b','--batch-size', help='size of batchs inserted ',
+                        'into the DB', default=BATCH_SIZE)
+    parser.add_argument('-e', '--db-engine', help="One of mysql or sqlite", 
                         required=True)
-    parser.add_argument('--hostname', help='MYSQL hostname', default=MYSQL_HOST)
-    parser.add_argument('--user', help='MYSQL username', default=MYSQL_USER)
-    parser.add_argument('--passwd', help='MYSQL password', default=MYSQL_PASS)
-    parser.add_argument('--port', help='MySQL port', default=MYSQL_PORT, 
+    parser.add_argument('-u', '--mysql_user', help='MYSQL username', default=MYSQL_USER)
+    parser.add_argument('-p', '--mysql_passwd', help='MYSQL password', default=MYSQL_PASS)
+    parser.add_argument('-H', '--mysql_hostname', help='MYSQL hostname', default=MYSQL_HOST)
+    parser.add_argument('-P', '--mysql_port', help='MySQL port', default=MYSQL_PORT, 
                         type=int)
     #TODO: add option to customize dense or sparse
 
     args = parser.parse_args()
+    if args.verbose == 0:
+        logger.setLevel(logging.ERROR)
+    if args.verbose == 1:
+        logger.setLevel(logging.INFO)
+    if args.verbose == 2:
+        logger.setLevel(logging.DEBUG)
+    
     logger.info("Started at {0}".format(str(time.strftime("%d-%m-%Y %H:%M:%S"))))
     #make sure outdir exists
     try:
         os.makedirs(args.output_dir)
     except OSError:
         pass
-
-    if args.cols:
-        with open(args.cols) as f_cols:
-            cols = [col.rstrip('\n') for col in f_cols]
-        col2id = dict((col,i) for i,col in enumerate(cols))
-    else:
-        cols = None
-        col2id = None
-    if args.rows:
-        with open(args.rows) as f_rows:
-            rows = [row.rstrip('\n') for row in f_rows]
-        row2id = dict((row,i) for i,row in enumerate(rows))
-    else:
-        rows = None
-        row2id = None
+#
+#    if args.cols:
+#        with open(args.cols) as f_cols:
+#            cols = [col.rstrip('\n') for col in f_cols]
+#        col2id = dict((col,i) for i,col in enumerate(cols))
+#    else:
+#        cols = None
+#        col2id = None
+#    if args.rows:
+#        with open(args.rows) as f_rows:
+#            rows = [row.rstrip('\n') for row in f_rows]
+#        row2id = dict((row,i) for i,row in enumerate(rows))
+#    else:
+#        rows = None
+#        row2id = None
 
     #coocurrences = {}
 
@@ -88,18 +101,18 @@ def main():
         per_output_db = args.output_dir +  '_peripheral'
         core_output_db = args.output_dir + '_core'
         per_dest = MySQLDestination(args.hostname, args.port, args.user, args.passwd, 
-                          per_output_db, ['cc'])
+                          per_output_db, ['cc'], args.batch_size)
         core_dest = MySQLDestination(args.hostname, args.port, args.user, args.passwd, 
-                          core_output_db, ['cc'])
+                          core_output_db, ['cc'], args.batch_size)
     elif args.db_engine == 'sqlite':
         per_output_db = os.path.join(args.output_dir, 'peripheral.db')
         core_output_db = os.path.join(args.output_dir, 'core.db')
-        per_dest = SqliteDestination(per_output_db)
-        core_dest = SqliteDestination(core_output_db)
+        per_dest = SqliteDestination(per_output_db, args.batch_size)
+        core_dest = SqliteDestination(core_output_db, args.batch_size)
         
     with core_dest, per_dest:
-        core = SparseCounter(core_dest)
-        per = SparseCounter(per_dest)
+        core = SparseCounter(core_dest, args.many)
+        per = SparseCounter(per_dest, args.many)
 
         with Timer() as t_counting:
             try: 
@@ -108,11 +121,11 @@ def main():
                     [w1,marker,w2] = l.rstrip('\n').split('\t')
                     if args.compose_op in w1:
                         tg = w1.split(args.compose_op)[1]
-                        if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
-                            per.count(w1, marker, w2)
+                        #if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
+                        per.count(w1, marker, w2)
                     else:
-                        if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
-                            core.count(w1, marker, w2)
+                        #if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
+                        core.count(w1, marker, w2)
             except ValueError:
                 logger.error("Error reading line: {0}".format(l))
     
@@ -129,12 +142,13 @@ def main():
         
         
 class SparseCounter():
-    def __init__(self, output_destination):
+    def __init__(self, output_destination, many):
         self.coocurrences = {}
         self.coocurrences_lock = RLock()
         self.saving_thread = None
         self.saving_thread_lock = RLock()
         self.output_destination = output_destination
+        self.many = many
         self.i = 0
     
     def count(self, w1, marker, w2):
@@ -154,14 +168,14 @@ class SparseCounter():
     
     def check_dump(self):
         with self.saving_thread_lock:
-            if len(self) >= MANY\
+            if len(self) >= self.many\
             and not self.saving_thread:
                 logger.info('asking for DB dump (records={0})'.format(len(self)))
                 self.saving_thread = Thread(target=self.run_dump)
                 self.saving_thread.start()
     
     def check_dump_sync(self):
-        if len(self) >= MANY:
+        if len(self) >= self.many:
             self.save()
                 
     def run_dump(self):
@@ -195,13 +209,14 @@ class SparseCounter():
                                                       N/t_save.interval))
         
 class MySQLDestination():
-    def __init__(self, host, port, user, passwd, output_db, tables ):
+    def __init__(self, host, port, user, passwd, output_db, tables, batch_size ):
         self.output_db = output_db
         self.tables = tables
         self.host = host
         self.user = user
         self.passwd = passwd
         self.port = port
+        self.batch_size = batch_size
         
     def __enter__(self):
         self.conn = MySQLdb.connect(host=self.host, user=self.user, 
@@ -239,39 +254,45 @@ class MySQLDestination():
         while coocurrences_copy:
             for marker in coocurrences_copy.keys():
                 marker_coocurrences = coocurrences_copy[marker]             
-                try: 
-                    marker_table = '{0}'.format(marker)
-                    query = "insert into {0} values( %s, %s ,%s) " \
-                        "on duplicate key update "\
-                        "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
-                        .format(marker_table)
-                    
-                    #sort to avoid deadlocks!
-                    insert_values = ((w1,w2,c) for (w1,w2),c in \
-                                    sorted(marker_coocurrences.iteritems(),
-                                           key=operator.itemgetter(0)))
-
-                    self.conn.begin()
-                    cur.executemany(query, insert_values)
-                    self.conn.commit()
+                marker_table = '{0}'.format(marker)
+                query = "insert into {0} values( %s, %s ,%s) " \
+                    "on duplicate key update "\
+                    "`occurrences` = `occurrences` + VALUES(`occurrences`);" \
+                    .format(marker_table)
+                
+                #sort to prevent deadlocks (still, they happen)
+                insert_values = ((w1,w2,c) for (w1,w2),c in \
+                                sorted(marker_coocurrences.iteritems(),
+                                       key=operator.itemgetter(0)))
+                for insert_values_chunk in \
+                    split_every(self.batch_size, insert_values.items()):
+                    saved = False
+                    while not saved:
+                        try:
+                            self.conn.begin()
+                            cur.executemany(query, insert_values_chunk)
+                            self.conn.commit()
+                            saved = True
+                        except MySQLdb.OperationalError, ex:
+                            #1213:deadlock detected
+                            #1205: lock timeout
+                            if ex.args[0] == 1213:
+                                #shit happens, we'll try again in the future
+                                logger.warning("DEADLOCK detected, retrying")
+                            elif  ex.args[0] == 1205:
+                                #shit happens, we'll try again in the future
+                                logger.warning("TIMEOUT detected, retrying")
+                            else:
+                                raise
                     del coocurrences_copy[marker]
-                except MySQLdb.OperationalError, ex:
-                    #1213:deadlock detected
-                    #1205: lock timeout
-                    if ex.args[0] == 1213 or ex.args[0] == 1205:
-                        #deadlock detected
-                        #shit happens, we'll try again in the future
-                        logger.warning("DEADLOCK while saving marker {0}"\
-                                       .format(marker))
-                    else:
-                        raise
         cur.close()
 
         
 
 class SqliteDestination():
-    def __init__(self, output_db):
+    def __init__(self, output_db, batch_size):
         self.output_db = output_db
+        self.batch_size = batch_size
     
     def __str__(self):
         return self.output_db
@@ -312,7 +333,7 @@ class SqliteDestination():
                 start_op = time.time()
                 #collect database values
                 for marker_cooocurrences_chunk in \
-                split_every(BATCH_SIZE, marker_coocurrences.items()):
+                split_every(self.batch_size, marker_coocurrences.items()):
                     params = []
                     for (w1,w2),c in marker_cooocurrences_chunk:
                         params.append(w1)
