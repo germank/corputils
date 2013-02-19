@@ -47,14 +47,17 @@ def main():
         "for each pattern", required=True)
     parser.add_argument('-x', '--compose-op', help='string using to identify'
     ' a peripheral space token', default='<-->')
-#    parser.add_argument('-c', '--cols')
-#    parser.add_argument('-r', '--rows')
+    parser.add_argument('-c', '--cols', help='filter context words')
+    parser.add_argument('-r', '--rows', help='filter pivots')
     parser.add_argument('-m', '--many', help='number of records needed to '
                         'start dumping', type=int, default=MANY)
     parser.add_argument('-b','--batch-size', help='size of batchs inserted '
                         'into the DB', type=int, default=BATCH_SIZE)
     parser.add_argument('-e', '--db-engine', help="Destination format", 
                         choices=['mysql', 'sqlite', 'text'], required=True)
+    parser.add_argument('--asynchronic', dest='synchronic', 
+                        help='continue counting while saving',
+                        action='store_false', default=True)
     parser.add_argument('-u', '--mysql_user', help='MYSQL username', default=MYSQL_USER)
     parser.add_argument('-p', '--mysql_passwd', help='MYSQL password', default=MYSQL_PASS)
     parser.add_argument('-H', '--mysql_hostname', help='MYSQL hostname', default=MYSQL_HOST)
@@ -76,23 +79,22 @@ def main():
         os.makedirs(args.output_dir)
     except OSError:
         pass
-#
-#    if args.cols:
-#        with open(args.cols) as f_cols:
-#            cols = [col.rstrip('\n') for col in f_cols]
-#        col2id = dict((col,i) for i,col in enumerate(cols))
-#    else:
-#        cols = None
-#        col2id = None
-#    if args.rows:
-#        with open(args.rows) as f_rows:
-#            rows = [row.rstrip('\n') for row in f_rows]
-#        row2id = dict((row,i) for i,row in enumerate(rows))
-#    else:
-#        rows = None
-#        row2id = None
 
-    #coocurrences = {}
+    if args.cols:
+        with open(args.cols) as f_cols:
+            cols = [col.rstrip('\n') for col in f_cols]
+        col2id = dict((col,i) for i,col in enumerate(cols))
+    else:
+        cols = None
+        col2id = None
+    if args.rows:
+        with open(args.rows) as f_rows:
+            rows = [row.rstrip('\n') for row in f_rows]
+        row2id = dict((row,i) for i,row in enumerate(rows))
+    else:
+        rows = None
+        row2id = None
+
 
     if args.db_engine == 'mysql':
         per_output_db = args.output_dir +  '_peripheral'
@@ -113,8 +115,8 @@ def main():
         core_dest = TextDestination(core_output_db)
         
     with core_dest, per_dest:
-        core = SparseCounter(core_dest, args.many)
-        per = SparseCounter(per_dest, args.many)
+        core = SparseCounter(core_dest, args.many, args.synchronic)
+        per = SparseCounter(per_dest, args.many, args.synchronic)
 
         with Timer() as t_counting:
             try: 
@@ -122,12 +124,12 @@ def main():
                                          openhook=fileinput.hook_encoded("utf-8")):
                     [w1,marker,w2] = l.rstrip('\n').split('\t')
                     if args.compose_op in w1:
-                        #tg = w1.split(args.compose_op)[1]
-                        #if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
-                        per.count(w1, marker, w2)
+                        tg = w1.split(args.compose_op)[1]
+                        if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
+                            per.count(w1, marker, w2)
                     else:
-                        #if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
-                        core.count(w1, marker, w2)
+                        if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
+                            core.count(w1, marker, w2)
             except ValueError:
                 logger.error("Error reading line: {0}".format(l))
     
@@ -144,13 +146,14 @@ def main():
         
         
 class SparseCounter():
-    def __init__(self, output_destination, many):
+    def __init__(self, output_destination, many, synchronic):
         self.coocurrences = {}
         self.coocurrences_lock = RLock()
         self.saving_thread = None
         self.saving_thread_lock = RLock()
         self.output_destination = output_destination
         self.many = many
+        self.synchronic = synchronic
         self.i = 0
     
     def count(self, w1, marker, w2):
@@ -162,7 +165,10 @@ class SparseCounter():
                 marker_coocurrences[(w1,w2)] = 0
             marker_coocurrences[(w1,w2)] += 1
             if self.i % 100 == 0:
-                self.check_dump_sync()
+                if self.synchronic:
+                    self.check_dump_sync()
+                else:
+                    self.check_dump()
                 self.i = 0
     
     def __len__(self):
