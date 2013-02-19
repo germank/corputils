@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import logging
 logger = logging.getLogger("coocurrence_count")
+logger.setUseParentHandlers(False);
 ch = logging.StreamHandler()
 ch.setLevel(logging.DEBUG)
 formatter = logging.Formatter("%(asctime)s\t%(levelname)s: %(message)s",
@@ -167,14 +168,18 @@ class SparseCounter():
         return sum([len(mc) for mc in self.coocurrences.itervalues()])
     
     def check_dump(self):
+        '''Checks whether counts in memory are already too many and a 
+        dump is needed. Returns immediately and schedules a thread'''
         with self.saving_thread_lock:
             if len(self) >= self.many\
             and not self.saving_thread:
-                logger.info('asking for DB dump (records={0})'.format(len(self)))
+                logger.info('asking for DB dump')
                 self.saving_thread = Thread(target=self.run_dump)
                 self.saving_thread.start()
     
     def check_dump_sync(self):
+        '''Checks whether counts in memory are already too many and a 
+        dump is needed. Waits until finished'''
         if len(self) >= self.many:
             self.save()
                 
@@ -191,10 +196,10 @@ class SparseCounter():
         with self.saving_thread_lock:
             if self.saving_thread:
                 thread_alive = self.saving_thread
-        logger.info('waiting for unfinished saves to end...\t')
         if thread_alive:
+            logger.info('waiting for unfinished saves to end...\t')
             thread_alive.join()
-        logger.info('saving thread joined')
+            logger.info('saving thread joined')
     
     def save(self):
         '''Dumps the results to the DB.'''
@@ -203,8 +208,9 @@ class SparseCounter():
                      .format(N, self.output_destination))
         with Timer() as t_save:
             self.output_destination.save(self)
-        logger.info("Finished saving records to {0} in {1:.2f} seconds at " 
-                     "{2:.2f} records/second ".format(self.output_destination,
+        logger.info("Finished saving {0} records to {1} in {2:.2f} seconds at " 
+                     "{3:.2f} records/second ".format(N,
+                                                      self.output_destination,
                                                       t_save.interval, 
                                                       N/t_save.interval))
         
@@ -324,7 +330,6 @@ class SqliteDestination():
         logger.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
         #database locked, let's lock the sparse_coocurrences
         with counter.coocurrences_lock:
-            start=time.time()
             N_rec = len(counter)
             logger.info('Start dumping {0} records)'.format(N_rec))
             for marker in counter.coocurrences.keys():
@@ -375,10 +380,6 @@ class SqliteDestination():
                         .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
                 #clear from memory
                 del counter.coocurrences[marker]
-            
-            end=time.time()    
-            logger.info('Dumping finished. Time consumed={0:.2f}s. Rec/s={1:.2f}'\
-                        .format(end-start, N_rec/(end-start)))
         con.commit()
         con.close()
     
