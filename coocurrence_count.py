@@ -18,7 +18,7 @@ import time
 import MySQLdb
 from itertools import repeat, islice
 from datetime import datetime
-from threading import Lock, Thread
+from threading import Lock, Thread, RLock
 from warnings import filterwarnings
 import operator
 filterwarnings('ignore', category = MySQLdb.Warning)
@@ -131,9 +131,9 @@ def main():
 class SparseCounter():
     def __init__(self, output_destination):
         self.coocurrences = {}
-        self.coocurrences_lock = Lock()
+        self.coocurrences_lock = RLock()
         self.saving_thread = None
-        self.saving_thread_lock = Lock()
+        self.saving_thread_lock = RLock()
         self.output_destination = output_destination
         self.i = 0
     
@@ -229,7 +229,7 @@ class MySQLDestination():
     def save(self, counter):
         #keeps a copy and frees the counter
         coocurrences_copy = {}
-        with counter.coocurrences_lock: 
+        with counter.coocurrences_lock:
             for marker in counter.coocurrences.keys():
                 coocurrences_copy[marker] = counter.coocurrences[marker]
                 del counter.coocurrences[marker]
