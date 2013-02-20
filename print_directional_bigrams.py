@@ -11,6 +11,9 @@ import re
 import sys
 from functools import partial
 
+#global variables: i promise not to do it again!
+left_comp_match = None
+right_comp_match = None
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -23,6 +26,8 @@ def main():
     parser.add_argument('-w', dest='window_size', type=int, default=None)
     parser.add_argument('-s', dest='separator', default='<s>')
     parser.add_argument('-x', '--comp_marker', default='<-->')
+    parser.add_argument('-d', '--disjoint', help='disjoint core and peripheral',
+                        action='store_true')
     parser.add_argument('--lword', help='left composition word regexp')
     parser.add_argument('--lpos', help='left composition pos regexp')
     parser.add_argument('--lfile', help='file contining left composition words')
@@ -53,48 +58,52 @@ def main():
         if line.rstrip('\n') == "</s>":
             #process sentence
             for i, t in enumerate(sentence): #i,t = index,tuple in sentence
-                #print coocurrences
-                lend = max(0,i-w) if w else 0
-                for lt in sentence[lend:i]:
-                    print "{0}\tl\t{1}".format(t[-1], lt[-1])
-                rend = min(len(sentence),i+(w+1)) if w else len(sentence)
-                for rt in sentence[i+1:rend]:
-                    print "{0}\tr\t{1}".format(t[-1], rt[-1])
-                #check if t should be composed
-                if left_comp_match(t) and t[4] > 0:
-                    comp_t = sentence[t[4]-1]
-                    assert comp_t[3] == t[4]
-                    if right_comp_match(comp_t):
-                        comp_pivot = "{0}{1}{2}".format(
-                            t[-1], args.comp_marker, comp_t[-1])
-                        #put the composed words in order
-                        if int(t[3]) < int(comp_t[3]):
-                            lcomp_t = t
-                            rcomp_t = comp_t
-                        else:
-                            lcomp_t = comp_t
-                            rcomp_t = t
-                        l = int(lcomp_t[3])-1
-                        r = int(rcomp_t[3])-1
-                        #print coocurrences
-                        #count left of first composed word
-                        lend = max(0,l-w) if w else 0
-                        for lt in sentence[lend:l]:
-                            print "{0}\tl\t{1}".format(comp_pivot, lt[-1])
-                        #count right of first and left of second in range of
-                        #the first
-                        lmid = min(r,l+(w+1)) if w else r
-                        for ct in sentence[l+1:lmid]:
-                            print "{0}\tc\t{1}".format(comp_pivot, ct[-1])
-                        #count right of first and left of second in range of
-                        #the second
-                        rmid = max(lmid,r-w) if w else r
-                        for ct in sentence[rmid:r]:
-                            print "{0}\tc\t{1}".format(comp_pivot, ct[-1])
-                        rend = min(len(sentence), r+(w+1)) if w else \
-                            len(sentence)
-                        for rt in sentence[r+1:rend]:
-                            print "{0}\tr\t{1}".format(comp_pivot, rt[-1])
+                comp_t = composition_target(left_comp_match, right_comp_match,
+                                            t, sentence)
+                #it doesn't print pivot coocurrences if args.disjoint is
+                #specified and this is context for composition
+                if not args.disjoint or not is_target_composition(t, 
+                left_comp_match, right_comp_match, sentence):
+                    #print coocurrences
+                    lend = max(0,i-w) if w else 0
+                    for lt in sentence[lend:i]:
+                        print "{0}\tl\t{1}".format(t[-1], lt[-1])
+                    rend = min(len(sentence),i+(w+1)) if w else len(sentence)
+                    for rt in sentence[i+1:rend]:
+                        print "{0}\tr\t{1}".format(t[-1], rt[-1])
+                    #check if t should be composed
+                
+                if comp_t:
+                    comp_pivot = "{0}{1}{2}".format(
+                        t[-1], args.comp_marker, comp_t[-1])
+                    #put the composed words in order
+                    if int(t[3]) < int(comp_t[3]):
+                        lcomp_t = t
+                        rcomp_t = comp_t
+                    else:
+                        lcomp_t = comp_t
+                        rcomp_t = t
+                    l = int(lcomp_t[3])-1
+                    r = int(rcomp_t[3])-1
+                    #print coocurrences
+                    #count left of first composed word
+                    lend = max(0,l-w) if w else 0
+                    for lt in sentence[lend:l]:
+                        print "{0}\tl\t{1}".format(comp_pivot, lt[-1])
+                    #count right of first and left of second in range of
+                    #the first
+                    lmid = min(r,l+(w+1)) if w else r
+                    for ct in sentence[l+1:lmid]:
+                        print "{0}\tc\t{1}".format(comp_pivot, ct[-1])
+                    #count right of first and left of second in range of
+                    #the second
+                    rmid = max(lmid,r-w) if w else r
+                    for ct in sentence[rmid:r]:
+                        print "{0}\tc\t{1}".format(comp_pivot, ct[-1])
+                    rend = min(len(sentence), r+(w+1)) if w else \
+                        len(sentence)
+                    for rt in sentence[r+1:rend]:
+                        print "{0}\tr\t{1}".format(comp_pivot, rt[-1])
 
             #start a new sentence
             sentence = []
@@ -107,6 +116,20 @@ def main():
             #append pos tag as the first letter in lowercase
             t.append("{0}-{1}".format(t[1].lower(),t[2][0].lower()))
             sentence.append(t)   
+
+def is_target_composition(t1, left_comp_match, right_comp_match, sentence):
+    for t in sentence:
+        if composition_target(left_comp_match, right_comp_match, t, sentence) == t1:
+            return True
+    return False
+
+def composition_target(left_comp_match, right_comp_match, t, sentence):
+    if left_comp_match(t) and t[4] > 0:
+        comp_t = sentence[t[4]-1]
+        assert comp_t[3] == t[4]
+        if right_comp_match(comp_t):
+            return comp_t
+    return None
 
 def load_words(filename):
     pivots = set()
