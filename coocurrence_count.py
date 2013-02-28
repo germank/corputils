@@ -9,11 +9,16 @@ logger = logging.getLogger()
 import argparse
 import fileinput
 import os
-import sqlite3
+try:
+    import sqlite3
+except ImportError:
+    logger.warn("sqlite3 not available")
 import time
-import portalocker
-
-import MySQLdb
+#import portalocker
+try:
+    import MySQLdb
+except ImportError:
+    logger.warn("MySql not available")
 from itertools import repeat, islice
 from threading import Thread, RLock
 from warnings import filterwarnings
@@ -327,7 +332,6 @@ class TextDestination():
                 coocurrences_copy[marker] = counter.coocurrences[marker]
                 del counter.coocurrences[marker]
 
-        #repeats in case of deadlock
         for marker in coocurrences_copy.keys():
             marker_coocurrences = coocurrences_copy[marker]             
             marker_file = os.path.join(self.output_folder, marker)
@@ -335,7 +339,8 @@ class TextDestination():
             insert_values = ((w1,w2,c) for (w1,w2),c in \
                             sorted(marker_coocurrences.iteritems(),
                                    key=operator.itemgetter(0)))
-            with portalocker.Lock(marker_file, truncate=None) as out:
+            #with portalocker.Lock(marker_file, truncate=None) as out:
+            with open(marker_file, 'a') as out:
                 for values in insert_values:
                     out.write('{0}\t{1}\t{2}\n'.format(*values))
             del coocurrences_copy[marker]
