@@ -28,6 +28,8 @@ def main():
     parser.add_argument('-x', '--comp_marker', default='<-->')
     parser.add_argument('-d', '--disjoint', help='disjoint core and peripheral',
                         action='store_true')
+    parser.add_argument('--to-lower', default=False, action='store_true',
+        help='transform lemmas to lowercase')
     parser.add_argument('--lword', help='left composition word regexp')
     parser.add_argument('--lpos', help='left composition pos regexp')
     parser.add_argument('--lfile', help='file contining left composition words')
@@ -114,7 +116,10 @@ def main():
             t[3] = int(t[3])
             t[4] = int(t[4])
             #append pos tag as the first letter in lowercase
-            t.append("{0}-{1}".format(t[1].lower(),t[2][0].lower()))
+            if args.to_lower:
+                t.append("{0}-{1}".format(t[1].lower(),t[2][0].lower()))
+            else:
+                t.append("{0}-{1}".format(t[1],t[2][0].lower()))
             sentence.append(t)   
 
 def is_target_composition(t1, left_comp_match, right_comp_match, sentence):
