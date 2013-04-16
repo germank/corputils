@@ -30,6 +30,8 @@ def main():
     parser.add_argument('-x', '--comp_marker', default='<-->')
     parser.add_argument('-d', '--disjoint', help='disjoint core and peripheral',
                         action='store_true')
+    parser.add_argument('-P', '--no-pos', help='don\'t add a POS indicator to '
+                        'the lemmas', dest='pos', default=True, action='store_false')
     parser.add_argument('--to-lower', default=False, action='store_true',
         help='transform lemmas to lowercase')
     parser.add_argument('--linear_comp', help='A pseudo-regular expression to match '
@@ -135,10 +137,14 @@ def main():
             t[3] = int(t[3])
             t[4] = int(t[4])
             #append pos tag as the first letter in lowercase
+            lem = t[1]
             if args.to_lower:
-                t.append("{0}-{1}".format(t[1].lower(),t[2][0].lower()))
+                lem = lem.lower()
+            if args.pos:
+                t.append("{0}-{1}".format(lem,t[2][0].lower()))
             else:
-                t.append("{0}-{1}".format(t[1],t[2][0].lower()))
+                t.append("{0}".format(lem))
+            
             sentence.append(tuple(t))   
             tokens_str.append(line)
 
