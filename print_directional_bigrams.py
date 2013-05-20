@@ -30,15 +30,17 @@ def main():
     parser.add_argument('-x', '--comp_marker', default='<-->')
     parser.add_argument('-d', '--disjoint', help='disjoint core and peripheral',
                         action='store_true')
-    parser.add_argument('-P', '--no-pos', help='don\'t add a POS indicator to '
-                        'the lemmas', dest='pos', default=True, action='store_false')
+    #parser.add_argument('-P', '--no-pos', help='don\'t add a POS indicator to '
+    #                    'the lemmas', dest='pos', default=True, action='store_false')
     parser.add_argument('--to-lower', default=False, action='store_true',
-        help='transform lemmas to lowercase')
+        help='transform words and lemmas to lowercase')
     parser.add_argument('--linear_comp', help='A pseudo-regular expression to match '
                         'composition phrases bases on linear order.'
                         'Each token is represented with a T<> marker which can '
                         'take as optional arguments "word" and "pos". '
                         'E.g. T<word=big,pos=jj>(T<pos=jj>)*T<pos=nn>')
+    parser.add_argument('--lformat', default='{lemma}-{pos}')
+    parser.add_argument('--rformat', default='{lemma}-{pos}')
     parser.add_argument('--lword', help='left composition word regexp')
     parser.add_argument('--lpos', help='left composition pos regexp')
     parser.add_argument('--lfile', help='file contining left composition words')
@@ -88,15 +90,15 @@ def main():
                     #print coocurrences
                     lend = max(0,i-w) if w else 0
                     for lt in sentence[lend:i]:
-                        print "{0}\tl\t{1}".format(t[-1], lt[-1])
+                        print "{0}\tl\t{1}".format(t[-2], lt[-1])
                     rend = min(len(sentence),i+(w+1)) if w else len(sentence)
                     for rt in sentence[i+1:rend]:
-                        print "{0}\tr\t{1}".format(t[-1], rt[-1])
+                        print "{0}\tr\t{1}".format(t[-2], rt[-1])
                     #check if t should be composed
                 
             for t,comp_t in comp_matches:
                     comp_pivot = "{0}{1}{2}".format(
-                        t[-1], args.comp_marker, comp_t[-1])
+                        t[-2], args.comp_marker, comp_t[-2])
                     #put the composed words in order
                     if int(t[3]) < int(comp_t[3]):
                         lcomp_t = t
@@ -136,14 +138,14 @@ def main():
             t = line.split('\t')
             t[3] = int(t[3])
             t[4] = int(t[4])
-            #append pos tag as the first letter in lowercase
+            word = t[0]
             lem = t[1]
             if args.to_lower:
                 lem = lem.lower()
-            if args.pos:
-                t.append("{0}-{1}".format(lem,t[2][0].lower()))
-            else:
-                t.append("{0}".format(lem))
+                word = word.lower()
+            #if args.pos:
+            t.append(args.lformat.format(lemma=lem, word=word, pos=t[2][0].lower()))
+            t.append(args.rformat.format(lemma=lem, word=word, pos=t[2][0].lower()))
             
             sentence.append(tuple(t))   
             tokens_str.append(line)
