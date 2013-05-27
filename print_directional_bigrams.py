@@ -138,11 +138,13 @@ def main():
             t = line.split('\t')
             t[3] = int(t[3])
             t[4] = int(t[4])
+            if args.to_lower:
+                #FIXME: the lowecasign affects both the matching and the
+                #output. Is this a bug or a feature?
+                t[0] = t[0].lower()
+                t[1] = t[1].lower()
             word = t[0]
             lem = t[1]
-            if args.to_lower:
-                lem = lem.lower()
-                word = word.lower()
             #if args.pos:
             t.append(args.lformat.format(lemma=lem, word=word, pos=t[2][0].lower()))
             t.append(args.rformat.format(lemma=lem, word=word, pos=t[2][0].lower()))
@@ -196,7 +198,7 @@ def build_composition_match_func(word_regexp, pos_regexp, wordset_file):
     a POS tag, or a file containing a set of lemmas
     '''
     #I try to build the function using the least possible amount of lambdas
-    #Still, they are quite a lot
+    #Still, there are quite a lot
     match_func = None
     if word_regexp:
         word_regexp_func = re.compile(word_regexp, re.I).match
@@ -216,10 +218,12 @@ def build_composition_match_func(word_regexp, pos_regexp, wordset_file):
         wordset = load_words(wordset_file)
         in_wordset = wordset.__contains__
         if match_func:
-            match_func = partial(lambda f, w: f(w) and in_wordset(w[1]),
+            #FIXME: by using the index -2 we are referring to the formatted
+            #element. Bug or feature?
+            match_func = partial(lambda f, w: f(w) and in_wordset(w[-2]),
                 match_func)
         else:
-            match_func = lambda w: in_wordset(w[1])
+            match_func = lambda w: in_wordset(w[-2])
 
     if match_func:
         return match_func
