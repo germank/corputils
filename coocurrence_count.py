@@ -12,18 +12,18 @@ import os
 try:
     import sqlite3
 except ImportError:
-    logger.warn("sqlite3 not available")
+    logger.warn("Cannot use sqlite to store counts: sqlite3 not available")
 import time
 #import portalocker
 try:
     import MySQLdb
+    filterwarnings('ignore', category = MySQLdb.Warning)
 except ImportError:
-    logger.warn("MySql not available")
+    logger.warn("Cannot use MySql to store counts: MySQLdb not available")
 from itertools import repeat, islice
 from threading import Thread, RLock
 from warnings import filterwarnings
 import operator
-filterwarnings('ignore', category = MySQLdb.Warning)
 
 #logger = logging.getLogger("coocurrence_count")
 #logger.setLevel(logging.DEBUG)
