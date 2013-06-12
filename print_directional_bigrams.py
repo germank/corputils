@@ -55,6 +55,7 @@ def main():
                 sys.stderr.write('\n')
         if line.rstrip('\n') == "</s>":
             #detect compositions
+            #comp_matches is a set, so we don't count repetitions
             comp_matches = set()
             for match_func in match_funcs:
                 comp_matches.update(match_func.get_matches(sentence, plain_text_sentence))

@@ -24,17 +24,33 @@ class PeripheralLinearBigramMatcher():
         composition phrases bases on linear order.
         Each token is represented with a T<> marker which can 
         take as optional arguments "word" and "pos". 
-        E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<pos=NN>'''
+        E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>'''
         
         if not linear_comp:
             self.linear_comp_match = None
         def token_expr(expr):
+            '''Auxiliary function that returns a regular expression
+            that matches tokens in the corpus the specification
+            inside a T<> expression'''
             ret_exprs = list(repeat(r"[^\t\|]*?", 6))
+            
+            def _aux_value_to_regexp(value):
+                '''Auxiliary function that returns a regular expression
+                for a value expression.
+                value -> literal_string
+                value -> file(filename) 
+                ''' 
+                file_value_expr = re.match("file\((.*?)\)", value)
+                if file_value_expr:
+                    value = file_value_expr.group(1) 
+                    return "|".join(load_words(value))
+                return value
+            
             for _, kw, value in re.findall(r'(([^,=]+)=([^,=]+))', expr):
                 if kw == 'pos':
-                    ret_exprs[2] = "({0})".format(value)
+                    ret_exprs[2] = "({0})".format(_aux_value_to_regexp(value))
                 if kw == 'word':
-                    ret_exprs[1] = "({0})".format(value)
+                    ret_exprs[1] = "({0})".format(_aux_value_to_regexp(value))
             return '\\t'.join(ret_exprs)
         expr = re.sub('T<(.*?)>', lambda m:r"\|({0})".format(token_expr(m.group(1))), linear_comp) + r"\|"
         self.linear_comp_match = re.compile(expr)
