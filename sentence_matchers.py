@@ -51,6 +51,8 @@ class PeripheralLinearBigramMatcher():
                     ret_exprs[2] = "({0})".format(_aux_value_to_regexp(value))
                 if kw == 'word':
                     ret_exprs[1] = "({0})".format(_aux_value_to_regexp(value))
+                if kw == 'fword':
+                    ret_exprs[-2] = "({0})".format(_aux_value_to_regexp(value))
             return '\\t'.join(ret_exprs)
         expr = re.sub('T<(.*?)>', lambda m:r"\|({0})".format(token_expr(m.group(1))), linear_comp) + r"\|"
         self.linear_comp_match = re.compile(expr)

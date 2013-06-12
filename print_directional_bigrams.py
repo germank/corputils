@@ -23,8 +23,10 @@ def main():
     parser.add_argument('--to-lower', default=False, action='store_true',
         help='transform words and lemmas to lowercase')
     parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__init__.__doc__)
-    parser.add_argument('--lformat', default='{lemma}-{pos}')
-    parser.add_argument('--rformat', default='{lemma}-{pos}')
+    parser.add_argument('--lformat', default='{lemma}-{pos}', 
+                        help="format used for the pivot")
+    parser.add_argument('--rformat', default='{lemma}-{pos}', 
+                        help="format used for the feature")
     parser.add_argument('--lword', help='left composition word regexp')
     parser.add_argument('--lpos', help='left composition pos regexp')
     parser.add_argument('--lfile', help='file contining left composition words')
