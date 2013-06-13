@@ -18,6 +18,7 @@ def main():
     parser.add_argument('-x', '--comp_marker', default='<-->')
     parser.add_argument('-d', '--disjoint', help='disjoint core and peripheral',
                         action='store_true')
+    parser.add_argument('-c', '--core', help='specify the file containing the words in the core space')
     #parser.add_argument('-P', '--no-pos', help='don\'t add a POS indicator to '
     #                    'the lemmas', dest='pos', default=True, action='store_false')
     parser.add_argument('--to-lower', default=False, action='store_true',
@@ -39,12 +40,16 @@ def main():
     #build functions that match a peripheral bigram
     match_funcs = []
     if args.linear_comp:
-        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp))
+        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
     
     if args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
         match_funcs.append(PeripheralDependencyBigramMatcher(args.lword, args.lpos, args.lfile, 
                  args.rword, args.rpos, args.rfile))
     
+    if args.core:
+        core_words = set(w.strip() for w in file(args.core))
+    else:
+        core_words = None
     sentence = [] #list of tuples (w, l, pos, i, dep_i, dep_tag, "w-pos")
     plain_text_sentence = [] #list of lines read from parsed corpora
     i=0
@@ -64,6 +69,10 @@ def main():
             
             #process sentence
             for i, t in enumerate(sentence): #i,t = index,tuple in sentence
+                #it doesn't print pivot coocurrences if core has been specified
+                #and the pivot is not there
+                if core_words and t[-2] not in core_words:
+                    continue
                 #it doesn't print pivot coocurrences if args.disjoint is
                 #specified and this is context for composition
                 if not args.disjoint or not is_target_composition(t, comp_matches):
@@ -77,6 +86,10 @@ def main():
                     #check if t should be composed
                 
             for t,comp_t in comp_matches:
+                    #it doesn't print peripheral coocurrences if core has been specified
+                    #and the target is not there
+                    if core_words and comp_t[-2] not in core_words:
+                        continue
                     comp_pivot = "{0}{1}{2}".format(
                         t[-2], args.comp_marker, comp_t[-2])
                     #put the composed words in order

@@ -19,7 +19,7 @@ def load_words(filename):
     return pivots
 
 class PeripheralLinearBigramMatcher():
-    def __init__(self, linear_comp):
+    def __init__(self, linear_comp, ignore_case=False):
         '''linear_comp: A pseudo-regular expression to match 
         composition phrases bases on linear order.
         Each token is represented with a T<> marker which can 
@@ -34,6 +34,9 @@ class PeripheralLinearBigramMatcher():
             inside a T<> expression'''
             ret_exprs = list(repeat(r"[^\t\|]*?", 6))
             
+            def _sanitize(value):
+                return re.sub(r'(?<!\\)\.',  r"[^\t\|]", value)
+            
             def _aux_value_to_regexp(value):
                 '''Auxiliary function that returns a regular expression
                 for a value expression.
@@ -44,18 +47,18 @@ class PeripheralLinearBigramMatcher():
                 if file_value_expr:
                     value = file_value_expr.group(1) 
                     return "|".join(load_words(value))
-                return value
+                return _sanitize(value)
             
             for _, kw, value in re.findall(r'(([^,=]+)=([^,=]+))', expr):
                 if kw == 'pos':
                     ret_exprs[2] = "({0})".format(_aux_value_to_regexp(value))
                 if kw == 'word':
+                    ret_exprs[0] = "({0})".format(_aux_value_to_regexp(value))
+                if kw == 'lemma':
                     ret_exprs[1] = "({0})".format(_aux_value_to_regexp(value))
-                if kw == 'fword':
-                    ret_exprs[-2] = "({0})".format(_aux_value_to_regexp(value))
             return '\\t'.join(ret_exprs)
-        expr = re.sub('T<(.*?)>', lambda m:r"\|({0})".format(token_expr(m.group(1))), linear_comp) + r"\|"
-        self.linear_comp_match = re.compile(expr)
+        expr = re.sub(r'T<(.*?)>', lambda m:r"\|({0})".format(token_expr(m.group(1))), linear_comp) + r"\|"
+        self.linear_comp_match = re.compile(expr, flags=re.IGNORECASE if ignore_case else None )
     
     def get_matches(self, sentence, plain_text_sentence):
         ret = []
