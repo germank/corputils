@@ -32,13 +32,13 @@ def main():
 
     assert all((fn.endswith(args.filenames_extension) for fn in
     args.filenames)), 'The provided files do not end with extension {0}. Fix '\
-    'it or change the extension using the switch'
+    'it or change the expected extension using the switch'
     ' -e'.format(args.filenames_extension)
     
     
     pattern = re.compile(args.hash_pattern)
     subfilenames_format = os.path.join(args.output_dir, 
-        args.filenames[0][:-len(args.filenames_extension)] + '.{0}' +
+        os.path.basename(args.filenames[0])[:-len(args.filenames_extension)] + '.{0}' +
         args.filenames_extension)
 
     for line in fileinput.input(args.filenames):
