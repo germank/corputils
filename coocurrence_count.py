@@ -59,7 +59,7 @@ def main():
     parser.add_argument('-b','--batch-size', help='size of batchs inserted '
                         'into the DB', type=int, default=BATCH_SIZE)
     parser.add_argument('-e', '--db-engine', help="Destination format", 
-                        choices=['mysql', 'sqlite', 'text'], required=True)
+                        choices=['mysql', 'sqlite', 'text'], default='text')
     parser.add_argument('--asynchronic', dest='synchronic', 
                         help='continue counting while saving',
                         action='store_false', default=True)
