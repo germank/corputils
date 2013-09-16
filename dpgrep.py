@@ -16,9 +16,10 @@ def main():
     parser = argparse.ArgumentParser(description=
     '''Prints sentences that match the given cirteria''')
     parser.add_argument('corpora', help='files with the parsed corpora',
-        default="-", nargs='?')
+        default="-", nargs='*')
     #parser.add_argument('-P', '--no-pos', help='don\'t add a POS indicator to '
     #                    'the lemmas', dest='pos', default=True, action='store_false')
+    #FIXME: not only it ignores case differences, but it transforms it
     parser.add_argument('--to-lower', '-i', default=False, action='store_true',
         help='ignore lower/upper case differences')
     parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__init__.__doc__)
@@ -30,6 +31,8 @@ def main():
     parser.add_argument('--rword', help='right composition word regexp')
     parser.add_argument('--rpos', help='right composition pos regexp')
     parser.add_argument('--rfile', help='right contining left composition words')
+    parser.add_argument('--no-color', help='don\'t print matches in color',
+    action='store_true', default=False)
 
     args = parser.parse_args()
 
@@ -42,6 +45,12 @@ def main():
         match_funcs.append(PeripheralDependencyBigramMatcher(args.lword, args.lpos, args.lfile, 
                  args.rword, args.rpos, args.rfile))
     
+    if not args.no_color:
+        RED = '\033[91m'
+        ENDC = '\033[0m'
+    else:
+        RED = ''
+        ENDC = ''
     sentence = [] #list of tuples (w, l, pos, i, dep_i, dep_tag, "w-pos")
     plain_text_sentence = [] #list of lines read from parsed corpora
     for line in fileinput.input(args.corpora):
@@ -55,10 +64,8 @@ def main():
                 print "<s>"
                 #process sentence
                 for i, t in enumerate(sentence): #i,t = index,tuple in sentence
-                    has_match = any((t[3] - 1 ==i or comp_t[3] - 1 == i for t,comp_t in comp_matches))
+                    has_match = any((t[3] - 1 ==i for match in comp_matches for t in match))
                     if has_match:
-                        RED = '\033[91m'
-                        ENDC = '\033[0m'
                         print RED + '\t'.join(str(x) for x in t[0:6]) + ENDC
                     else:
                         print '\t'.join(str(x) for x in t[0:6])

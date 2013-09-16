@@ -32,10 +32,10 @@ class PeripheralLinearBigramMatcher():
             '''Auxiliary function that returns a regular expression
             that matches tokens in the corpus the specification
             inside a T<> expression'''
-            ret_exprs = list(repeat(r"[^\t\|]*?", 6))
+            ret_exprs = list(repeat(r"[^\t\|]*", 6))
             
             def _sanitize(value):
-                return re.sub(r'(?<!\\)\.',  r"[^\t\|]", value)
+                return re.sub(r'(?<!\\)\.',  r'[^\\t\|]', value)
             
             def _aux_value_to_regexp(value):
                 '''Auxiliary function that returns a regular expression
@@ -57,15 +57,22 @@ class PeripheralLinearBigramMatcher():
                 if kw == 'lemma':
                     ret_exprs[1] = "({0})".format(_aux_value_to_regexp(value))
             return '\\t'.join(ret_exprs)
-        expr = re.sub(r'T<(.*?)>', lambda m:r"\|({0})".format(token_expr(m.group(1))), linear_comp) + r"\|"
-        self.linear_comp_match = re.compile(expr, flags=re.IGNORECASE if ignore_case else None )
+        #tokens are delimited by |
+        #print list(filter(bool,re.split(r'(T<.*?>)', linear_comp)))
+        #re.sub(r'T<(.*)>'
+        #linear_comp = r"\|".join(filter(bool,re.split(r'(T<.*?>)', linear_comp)))
+        expr = re.sub(r'T<(.*?)>', lambda m:r"\|({0})\|".format(token_expr(m.group(1))), linear_comp)
+        self.expr = expr
+        self.linear_comp_match = re.compile(expr, flags=re.IGNORECASE if
+        ignore_case else 0 )
     
     def get_matches(self, sentence, plain_text_sentence):
         ret = []
         if self.linear_comp_match:
             #we transform the sentence into a string
-            sentence_str = "|{0}|".format("|".join(plain_text_sentence))
-            token_lens = [len(t)+1 for t in plain_text_sentence]
+            sep = "||"
+            sentence_str = "|{0}|".format(sep.join(plain_text_sentence))
+            token_lens = [len(t)+len(sep) for t in plain_text_sentence]
             partial_sums = [sum(token_lens[:i]) for i in range(len(token_lens)+1)]
             #token_lims = [(s,e-1) for s,e in zip(partial_sums[:-1], partial_sums[1:])] 
             token_start2pos = {s:i for i,s in enumerate(partial_sums[:-1])}
@@ -74,9 +81,8 @@ class PeripheralLinearBigramMatcher():
             for i,m in enumerate(self.linear_comp_match.finditer(sentence_str)):
                 #obtain the matched tokens
                 left_match_pos = token_start2pos[m.start(0)]
-                right_match_pos = token_end2pos[m.end(0)-1]
-                ret.append((sentence[left_match_pos], 
-                            sentence[right_match_pos]))
+                right_match_pos = token_end2pos[m.end(0)]
+                ret.append(tuple(sentence[left_match_pos:right_match_pos+1]))
         return ret
 
 class PeripheralDependencyBigramMatcher():
