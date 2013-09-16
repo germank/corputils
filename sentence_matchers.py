@@ -19,13 +19,12 @@ def load_words(filename):
     return pivots
 
 class PeripheralLinearBigramMatcher():
+    '''Match phrases based on a pseudo-regular expression.
+    Each token is represented with a T<> marker which can 
+    take as optional arguments "word" and "pos". 
+    E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>'''
+
     def __init__(self, linear_comp, ignore_case=False):
-        '''linear_comp: A pseudo-regular expression to match 
-        composition phrases bases on linear order.
-        Each token is represented with a T<> marker which can 
-        take as optional arguments "word" and "pos". 
-        E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>'''
-        
         if not linear_comp:
             self.linear_comp_match = None
         def token_expr(expr):

@@ -14,26 +14,28 @@ def main():
     parser.add_argument('corpora', help='files with the parsed corpora',
         default="-", nargs='?')
     parser.add_argument('-w', dest='window_size', type=int, default=None)
-    parser.add_argument('-s', dest='separator', default='<s>')
-    parser.add_argument('-x', '--comp_marker', default='<-->')
-    parser.add_argument('-d', '--disjoint', help='disjoint core and peripheral',
+    parser.add_argument('-s', dest='separator', default='<s>', help="sentence "
+    "separator (default=<s>)")
+    parser.add_argument('-x', '--comp_marker', default='<-->', help="token "
+    "separator for composed bigrams (e.g. red-j<-->car-n)")
+    parser.add_argument('-d', '--disjoint', help='disjoint context for core and peripheral',
                         action='store_true')
     parser.add_argument('-c', '--core', help='specify the file containing the words in the core space')
-    #parser.add_argument('-P', '--no-pos', help='don\'t add a POS indicator to '
-    #                    'the lemmas', dest='pos', default=True, action='store_false')
     parser.add_argument('--to-lower', default=False, action='store_true',
         help='transform words and lemmas to lowercase')
-    parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__init__.__doc__)
     parser.add_argument('--lformat', default='{lemma}-{pos}', 
-                        help="format used for the pivot")
+                        help="format used for the target")
     parser.add_argument('--rformat', default='{lemma}-{pos}', 
-                        help="format used for the feature")
-    parser.add_argument('--lword', help='left composition word regexp')
-    parser.add_argument('--lpos', help='left composition pos regexp')
-    parser.add_argument('--lfile', help='file contining left composition words')
-    parser.add_argument('--rword', help='right composition word regexp')
-    parser.add_argument('--rpos', help='right composition pos regexp')
-    parser.add_argument('--rfile', help='right contining left composition words')
+                        help="format used for the context")
+    parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__doc__)
+    parser.add_argument('--lword', help='Dependency arc matching: left word regexp')
+    parser.add_argument('--lpos', help='Dependency arc matching: left pos regexp')
+    parser.add_argument('--lfile', help='Dependency arc matching: file '
+    'containing possible words of the right hand side')
+    parser.add_argument('--rword', help='Dependency arc matching: right word regexp')
+    parser.add_argument('--rpos', help='Dependency arc matching: right pos regexp')
+    parser.add_argument('--rfile', help='Dependency arc matching: file '
+    'containing possible words of the right hand side')
 
     args = parser.parse_args()
     w = args.window_size
