@@ -67,7 +67,13 @@ def main():
             #comp_matches is a set, so we don't count repetitions
             comp_matches = set()
             for match_func in match_funcs:
-                comp_matches.update(match_func.get_matches(sentence, plain_text_sentence))
+                for m in match_func.get_matches(sentence, plain_text_sentence):
+                    #we only target bigrams
+                    if len(m)>2:
+                        m = (m[0], m[-1])
+                    elif len(m)<2:
+                        continue
+                    comp_matches.add(m)
             
             #process sentence
             for i, t in enumerate(sentence): #i,t = index,tuple in sentence
