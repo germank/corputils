@@ -3,7 +3,7 @@
 import argparse
 import fileinput
 import sys
-from sentence_matchers import PeripheralDependencyBigramMatcher, PeripheralLinearBigramMatcher
+from sentence_matchers import *
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -23,33 +23,29 @@ def main():
     parser.add_argument('-c', '--core', help='specify the file containing the words in the core space')
     parser.add_argument('--to-lower', default=False, action='store_true',
         help='transform words and lemmas to lowercase')
-    parser.add_argument('--lformat', default='{lemma}-{pos}', 
-                        help="format used for the target")
-    parser.add_argument('--rformat', default='{lemma}-{pos}', 
-                        help="format used for the context")
+    parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
+                        help="format used for the target. Variables are "
+                        "{word}, {lemma}, {pos} and {cat}")
+    parser.add_argument('-cf', '--context-format', default='{lemma}-{cat}', 
+                        help="format used for the context. Variables are "
+                        "{word}, {lemma}, {pos} and {cat}")
     parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__doc__)
-    parser.add_argument('--deprel', help='Dependency arc marching: specify the '
+    parser.add_argument('-dr', '--deprel', help='Dependency arc marching: specify the '
     'relation tag name')
-    parser.add_argument('--lword', help='Dependency arc matching: left word regexp')
-    parser.add_argument('--lpos', help='Dependency arc matching: left pos regexp')
-    parser.add_argument('--lfile', help='Dependency arc matching: file '
+    parser.add_argument('-dw','--depword', help='Dependency arc matching: left word regexp')
+    parser.add_argument('-dp', '--deppos', help='Dependency arc matching: left pos regexp')
+    parser.add_argument('-df', '--depfile', help='Dependency arc matching: file '
     'containing possible words of the right hand side')
-    parser.add_argument('--rword', help='Dependency arc matching: right word regexp')
-    parser.add_argument('--rpos', help='Dependency arc matching: right pos regexp')
-    parser.add_argument('--rfile', help='Dependency arc matching: file '
+    parser.add_argument('-hw', '--headword', help='Dependency arc matching: right word regexp')
+    parser.add_argument('-hp', '--headpos', help='Dependency arc matching: right pos regexp')
+    parser.add_argument('-hf', '--headfile', help='Dependency arc matching: file '
     'containing possible words of the right hand side')
 
     args = parser.parse_args()
     w = args.window_size
     #build functions that match a peripheral bigram
-    match_funcs = []
-    if args.linear_comp:
-        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
-    
-    if args.deprel or args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
-        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.lword, args.lpos, args.lfile, 
-                 args.rword, args.rpos, args.rfile))
-    
+    match_funcs = build_matchers(args) 
+
     if args.core:
         core_words = set(w.strip() for w in file(args.core))
     else:
@@ -153,8 +149,8 @@ def main():
             word = t[0]
             lem = t[1]
             #if args.pos:
-            t.append(args.lformat.format(lemma=lem, word=word, pos=t[2][0].lower()))
-            t.append(args.rformat.format(lemma=lem, word=word, pos=t[2][0].lower()))
+            t.append(args.target_format.format(lemma=lem, word=word, cat=t[2][0].lower(), pos=t[2]))
+            t.append(args.context_format.format(lemma=lem, word=word, cat=t[2][0].lower(), pos=t[2]))
             
             sentence.append(tuple(t))   
             plain_text_sentence.append(line)

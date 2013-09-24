@@ -18,6 +18,21 @@ def load_words(filename):
         pivots.add(line.strip(' \t\n'))
     return pivots
 
+def build_matchers(args):
+    '''
+    Returns a list of matchers based on the specification described in args.
+    The specification is currently strongly coupled with the command arguments
+    that both dpgrep and print_directional_bigrams take (ugly, but useful)
+    '''
+    match_funcs = []
+    if args.linear_comp:
+        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
+    
+    if args.deprel or args.depword or args.deppos or args.depfile or args.headword or args.headpos or args.headfile:
+        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.depword, args.deppos, args.depfile, 
+                 args.headword, args.headpos, args.headfile))
+    return match_funcs
+
 class PeripheralLinearBigramMatcher():
     '''Match phrases based on a pseudo-regular expression.
     Each token is represented with a T<> marker which can 

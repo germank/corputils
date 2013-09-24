@@ -10,7 +10,7 @@ import os
 import re
 import sys
 
-from sentence_matchers import PeripheralDependencyBigramMatcher, PeripheralLinearBigramMatcher
+from sentence_matchers import *
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -23,29 +23,24 @@ def main():
     parser.add_argument('--to-lower', '-i', default=False, action='store_true',
         help='ignore lower/upper case differences')
     parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__init__.__doc__)
-    parser.add_argument('--format', default='{lemma}-{pos}', 
+    parser.add_argument('--format', default='{lemma}-{cat}', 
                         help="format used for the pivot")
-    parser.add_argument('--deprel', help='Dependency arc marching: specify the '
+    parser.add_argument('-dr', '--deprel', help='Dependency arc marching: specify the '
     'relation tag name')
-    parser.add_argument('--lword', help='left composition word regexp')
-    parser.add_argument('--lpos', help='left composition pos regexp')
-    parser.add_argument('--lfile', help='file contining left composition words')
-    parser.add_argument('--rword', help='right composition word regexp')
-    parser.add_argument('--rpos', help='right composition pos regexp')
-    parser.add_argument('--rfile', help='right contining left composition words')
+    parser.add_argument('-dw','--depword', help='Dependency arc matching: left word regexp')
+    parser.add_argument('-dp', '--deppos', help='Dependency arc matching: left pos regexp')
+    parser.add_argument('-df', '--depfile', help='Dependency arc matching: file '
+    'containing possible words of the right hand side')
+    parser.add_argument('-hw', '--headword', help='Dependency arc matching: right word regexp')
+    parser.add_argument('-hp', '--headpos', help='Dependency arc matching: right pos regexp')
+    parser.add_argument('-hf', '--headfile', help='Dependency arc matching: file '
+    'containing possible words of the right hand side')
     parser.add_argument('--no-color', help='don\'t print matches in color',
     action='store_true', default=False)
 
     args = parser.parse_args()
 
-    #build functions that match a peripheral bigram
-    match_funcs = []
-    if args.linear_comp:
-        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
-    
-    if args.deprel or args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
-        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.lword, args.lpos, args.lfile, 
-                 args.rword, args.rpos, args.rfile))
+    match_funcs = build_matchers(args) 
     
     if not args.no_color:
         RED = '\033[91m'
@@ -90,10 +85,10 @@ def main():
             word = t[0]
             lem = t[1]
             #if args.pos:
-            t.append(args.format.format(lemma=lem, word=word, pos=t[2][0].lower()))
+            t.append(args.format.format(lemma=lem, word=word, cat=t[2][0].lower(), pos=t[2]))
             #FIXME: this makes no sense here, but need to add it for implementation issues 
             #(the matcher assumes the feature formatted string is there)
-            t.append(args.format.format(lemma=lem, word=word, pos=t[2][0].lower()))
+            t.append(args.format.format(lemma=lem, word=word, cat=t[2][0].lower(), pos=t[2]))
             sentence.append(tuple(t))   
             plain_text_sentence.append(line)
 
