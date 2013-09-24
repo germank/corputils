@@ -85,8 +85,9 @@ class PeripheralLinearBigramMatcher():
         return ret
 
 class PeripheralDependencyBigramMatcher():
-    def __init__(self, lword, lpos, lfile, rword, rpos, rfile):
+    def __init__(self, deprel, lword, lpos, lfile, rword, rpos, rfile):
         '''Matches bigrams across dependency arcs'''
+        self.reprel = deprel
         self.left_comp_match = self._build_composition_match_func(lword, lpos, lfile)
         self.right_comp_match = self._build_composition_match_func(rword, rpos, rfile)
     
@@ -94,6 +95,8 @@ class PeripheralDependencyBigramMatcher():
         '''If t is a matching left node, then return
         the node which is dependent upon'''
         if self.left_comp_match(t) and t[4] > 0:
+            if self.reprel and not re.match(self.reprel, t[5]):
+                return None
             comp_t = sentence[t[4]-1]
             assert comp_t[3] == t[4]
             if self.right_comp_match(comp_t):

@@ -25,6 +25,8 @@ def main():
     parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__init__.__doc__)
     parser.add_argument('--format', default='{lemma}-{pos}', 
                         help="format used for the pivot")
+    parser.add_argument('--deprel', help='Dependency arc marching: specify the '
+    'relation tag name')
     parser.add_argument('--lword', help='left composition word regexp')
     parser.add_argument('--lpos', help='left composition pos regexp')
     parser.add_argument('--lfile', help='file contining left composition words')
@@ -41,8 +43,8 @@ def main():
     if args.linear_comp:
         match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
     
-    if args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
-        match_funcs.append(PeripheralDependencyBigramMatcher(args.lword, args.lpos, args.lfile, 
+    if args.deprel or args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
+        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.lword, args.lpos, args.lfile, 
                  args.rword, args.rpos, args.rfile))
     
     if not args.no_color:

@@ -14,8 +14,8 @@ def main():
     parser.add_argument('corpora', help='files with the parsed corpora',
         default="-", nargs='?')
     parser.add_argument('-w', dest='window_size', type=int, default=None)
-    parser.add_argument('-s', dest='separator', default='<s>', help="sentence "
-    "separator (default=<s>)")
+    parser.add_argument('-s', dest='separator', default='s', help="sentence "
+    "separator (default=s)")
     parser.add_argument('-x', '--comp_marker', default='<-->', help="token "
     "separator for composed bigrams (e.g. red-j<-->car-n)")
     parser.add_argument('-d', '--disjoint', help='disjoint context for core and peripheral',
@@ -28,6 +28,8 @@ def main():
     parser.add_argument('--rformat', default='{lemma}-{pos}', 
                         help="format used for the context")
     parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__doc__)
+    parser.add_argument('--deprel', help='Dependency arc marching: specify the '
+    'relation tag name')
     parser.add_argument('--lword', help='Dependency arc matching: left word regexp')
     parser.add_argument('--lpos', help='Dependency arc matching: left pos regexp')
     parser.add_argument('--lfile', help='Dependency arc matching: file '
@@ -44,8 +46,8 @@ def main():
     if args.linear_comp:
         match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
     
-    if args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
-        match_funcs.append(PeripheralDependencyBigramMatcher(args.lword, args.lpos, args.lfile, 
+    if args.deprel or args.lword or args.lpos or args.lfile or args.rword or args.rpos or args.rfile:
+        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.lword, args.lpos, args.lfile, 
                  args.rword, args.rpos, args.rfile))
     
     if args.core:
@@ -62,7 +64,7 @@ def main():
             sys.stderr.write('.')
             if i % 80000 == 0:
                 sys.stderr.write('\n')
-        if line.rstrip('\n') == "</s>":
+        if line.strip('\n<>') == "/{0}".format(args.separator):
             #detect compositions
             #comp_matches is a set, so we don't count repetitions
             comp_matches = set()
