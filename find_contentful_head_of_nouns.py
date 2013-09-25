@@ -122,8 +122,8 @@ for line in fileinput.input():
   # if the element has a real head (not root!), the head of the
   # element is also a potential predicate chain element, it precedes
   # the current element linearly, and the relation is not COORD, PRN,
-  # OBJ nor ADV, update the head dependent info
-  if (head_offset>0) and (head_offset<curr_offset) and (type_of_line[head_offset-1] == "p") and (not re.match("^(PRN|OBJ|ADV|COORD)",dep_rel)):
+  # OBJ, AMOD nor ADV, update the head dependent info
+  if (head_offset>0) and (head_offset<curr_offset) and (type_of_line[head_offset-1] == "p") and (not re.match("^(PRN|OBJ|ADV|COORD|AMOD)",dep_rel)):
    predicate_chain_dependent_offsets[head_offset-1]=curr_offset
  else:
  # in all other cases, we are not interested in the category of the item
