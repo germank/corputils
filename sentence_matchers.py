@@ -100,30 +100,31 @@ class PeripheralLinearBigramMatcher():
         return ret
 
 class PeripheralDependencyBigramMatcher():
-    def __init__(self, deprel, lword, lpos, lfile, rword, rpos, rfile):
+    def __init__(self, deprel, depword, deppos, depfile, headword, headpos, headfile):
         '''Matches bigrams across dependency arcs'''
         self.reprel = deprel
-        self.left_comp_match = self._build_composition_match_func(lword, lpos, lfile)
-        self.right_comp_match = self._build_composition_match_func(rword, rpos, rfile)
+        self.dep_comp_match = self._build_composition_match_func(depword, deppos, depfile)
+        self.head_comp_match = self._build_composition_match_func(headword, headpos, headfile)
     
-    def composition_target(self,  t, sentence):
-        '''If t is a matching left node, then return
+    def composition_target(self,  dep_t, sentence):
+        '''If dep_t is a matching left node, then return
         the node which is dependent upon'''
-        if self.left_comp_match(t) and t[4] > 0:
-            if self.reprel and not re.match(self.reprel, t[5]):
+        print sentence
+        if self.dep_comp_match(dep_t) and dep_t[4] > 0:
+            if self.reprel and not re.match(self.reprel, dep_t[5]):
                 return None
-            comp_t = sentence[t[4]-1]
-            assert comp_t[3] == t[4]
-            if self.right_comp_match(comp_t):
-                return comp_t
+            head_t = sentence[dep_t[4]-1]
+            assert head_t[3] == dep_t[4], (dep_t, head_t)
+            if self.head_comp_match(head_t):
+                return head_t
         return None
 
     def get_matches(self, sentence, _):
         comp_matches = []
-        for i, t in enumerate(sentence): #i,t = index,tuple in sentence
-            comp_t = self.composition_target(t, sentence)
-            if comp_t:
-                comp_matches.append((t,comp_t))
+        for i, dep_t in enumerate(sentence): #i,t = index,tuple in sentence
+            head_t = self.composition_target(dep_t, sentence)
+            if head_t:
+                comp_matches.append((dep_t,head_t))
         return comp_matches
 
     def _build_composition_match_func(self, word_regexp, pos_regexp, wordset_file):
