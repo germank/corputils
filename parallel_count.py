@@ -1,13 +1,13 @@
 #!/usr/bin/env python
-
 import argparse
 import fileinput
 import sys
-import itertools
 import logging
+import os
+import random
 from sentence_matchers import *
 from feature_extractor import *
-from readers import DPCorpusReader
+from count_pipeline import StreamingCountPipeline, CountSumPipeline
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -16,7 +16,14 @@ def main():
     given a dependency parsed corpus.
     Pivots = Context Words''')
     parser.add_argument('corpora', help='files with the parsed corpora',
-        default="-", nargs='*')
+        nargs='+')
+    parser.add_argument('-D', '--debug', action='store_true', default=False,
+    help="runs in local multithreading mode")
+    parser.add_argument('--resume', action='store_true', default=False,
+    help="If the output of a module is already present, don't re-run it "
+    "(only useful if the job died)")
+    parser.add_argument('-o', '--output', default='output', 
+    help='output directory')
     parser.add_argument('-z', '--gzip', action='store_true', default=False, 
     help="Interpret corpora as gzipped files")
     parser.add_argument('-w', dest='window_size', type=int, default=None)
@@ -73,57 +80,54 @@ def main():
         contexts_words = set(w.strip() for w in file(args.contexts))
     else:
         contexts_words = None
-
+    
     if args.targets:
         targets = set(w.strip() for w in file(args.targets))
     else:
         targets = None
-        
+
+    #FIXME: Matchers don't need to know target format (move filters to
+    #TargetsFeaturesExtractor
     #create a matcher for the core space
     matchers = [UnigramMatcher(pivot_words, args.target_format)]
     #build functions that match a peripheral bigram
     matchers.extend(get_composition_matchers(args) )
+    #FIXME: FeatureExtractors don't need to know target format (move filters to
+    #TargetsFeaturesExtractor
     #define the kind of features we want to extract
     feature_extractor = BOWFeatureExtractor(args.window_size, contexts_words,
         args.context_format)
     #initialize extractor
+    #FIXME: TargetsFeatureExtractor is not a FeatureExtractor (find a better name)
     targets_features_extractor = TargetsFeaturesExtractor(matchers,
                                                           feature_extractor,
                                                           args.target_format,
                                                           args.context_format,
                                                           targets)
-    #FIXME: parametrize
-    sentence_filter = lambda t: t[2][0] in 'NJVR'
-    #open corpus
-    if args.gzip:
-        input_corpora = itertools.chain(*map(gziplines, args.corpora))
-    else:
-        input_corpora = fileinput.FileInput(args.corpora)
-        
-    corpus_reader = DPCorpusReader(input_corpora,
-                                   sentence_filter=sentence_filter,
-                                   separator=args.separator)
 
-    #print directional bigrams
-    for target, feature in targets_features_extractor(corpus_reader):
-        print "{0}\t{1}".format(target.format(args.target_format), 
-                                feature.format(args.context_format))
+    #FIXME: move to config.yml
+    config = {
+        '*': {
+            'h_cpu': '24:0:0'
+        },
+        'count_matches': {
+            'h_vmem': '7G',
+            'h_cpu': '8:0:0'
+        }
+    }
+    #pipeline = StreamingCountPipeline('compute-0-1', 17160,#random.randint(2000,32767), 
+    #    os.path.join(os.getcwd(), args.output), targets_features_extractor, 
+    #    args.corpora, args.gzip, args.target_format, args.context_format)
+    pipeline = CountSumPipeline( 
+        os.path.join(os.getcwd(), args.output), targets_features_extractor, 
+        args.corpora, args.gzip, args.target_format, args.context_format,
+        args.separator)
+    pipeline.run(debug=args.debug, resume=args.resume, config=config)
 
-        
-
-def gziplines(fname):
-    from subprocess import Popen, PIPE
-    f = Popen(['zcat' ] + [fname], stdout=PIPE)
-    for line in f.stdout:
-        yield line
         
 if __name__ == '__main__':
     try:
         main()
-    except IOError, e:
-        if e.errno == 32:
-            #broken pipe, do nothing
-            pass
     except KeyboardInterrupt:
-        print >>sys.stderr, 'Aborting!'
+        print "Aborted!"
         sys.exit(1)

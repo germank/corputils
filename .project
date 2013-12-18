@@ -3,6 +3,7 @@
 	<name>coocurrence_count</name>
 	<comment></comment>
 	<projects>
+		<project>clutils</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>

@@ -305,6 +305,47 @@ class MySQLDestination():
                     del coocurrences_copy[marker]
         cur.close()
 
+class KyotoDestination():
+    def __init__(self, output):
+        self.output = output
+        
+    def __enter__(self):
+        #ensures file exists
+        try:
+            os.makedirs(os.path.dirname(self.output))
+        except OSError:
+            #ok
+            pass
+
+        return self
+
+    def __exit__(self, *args):
+        pass
+    
+    def __str__(self):
+        return self.output_folder
+    
+    def save(self, counter):
+        #keeps a copy and frees the counter
+        coocurrences_copy = {}
+        with counter.coocurrences_lock:
+            for marker in counter.coocurrences.keys():
+                coocurrences_copy[marker] = counter.coocurrences[marker]
+                del counter.coocurrences[marker]
+
+        for marker in coocurrences_copy.keys():
+            marker_coocurrences = coocurrences_copy[marker]             
+            marker_file = os.path.join(self.output_folder, marker)
+            
+            insert_values = ((w1,w2,c) for (w1,w2),c in \
+                            sorted(marker_coocurrences.iteritems(),
+                                   key=operator.itemgetter(0)))
+            #with portalocker.Lock(marker_file, truncate=None) as out:
+            with open(marker_file, 'a') as out:
+                for values in insert_values:
+                    out.write('{0}\t{1}\t{2}\n'.format(*values))
+            del coocurrences_copy[marker]
+
 class TextDestination():
     def __init__(self, output_folder):
         self.output_folder  = output_folder
@@ -355,6 +396,74 @@ class SqliteDestination():
     def __str__(self):
         return self.output_db
     
+#    def load(self, counter, markers) #FIXME: remove the need for specifying the markers
+#        timeout = 60*60*2 #infinitm
+#        con = sqlite3.connect(self.output_db,timeout,isolation_level="EXCLUSIVE")
+#        cur = con.cursor()
+#        #Create tables for each marker before falling into lock
+#        #It could become a bug if new markers arise after the tables where
+#        #created, but since marker are quite stable it's very unlikely.
+#        #The reason for doing this is that the CREATE TABLE frees the lock
+#        #and lets other process to take the DB while we where dumping
+#        #Any of these firsts queries could lock the DB, but we are not
+#        #guaranteed to keep it until we execute the BEGIN EXCLUSIVE
+#        cur.execute("PRAGMA synchronous=OFF")
+#        cur.execute("PRAGMA count_changes=OFF")
+#        cur.execute("PRAGMA journal_mode=OFF")
+#        cur.execute("PRAGMA temp_store=MEMORY")
+#        con.execute('BEGIN EXCLUSIVE TRANSACTION')
+#        logger.debug('DB lock acquired (time to lock={0:.2f} s.)'.format(time.time()-lock_time))
+#        #database locked, let's lock the sparse_coocurrences
+#        with counter.coocurrences_lock:
+#            logger.info('Loading records')
+#            for marker in markers:
+#                counter.coocurrences[marker] = {}
+#                marker_coocurrences = counter.coocurrences[marker]
+#                marker_table = '{0}'.format(marker)
+#                start_op = time.time()
+#                #collect database values
+#                select_query = \
+#                    "SELECT * FROM {0}".format(marker_table)
+#                cur.execute(select_query, params)
+#                while 1:
+#                    saved = cur.fetchone()
+#                    if saved:
+#                        try:                            
+#                            marker_coocurrences[(saved[0],saved[1])] = \
+#                                int(saved[2])
+#                        except KeyError:
+#                            logger.error("{0} obtained while executing {1}"\
+#                                         .format(str(saved)), select_query)
+#                    else:
+#                        break
+#                
+#                #for(w1,w2),c in marker_coocurrences.iteritems():
+#                #    cur.execute("SELECT * FROM {0} WHERE pivot = ? AND "
+#                #                "context =?".format(marker),(w1,w2))
+#                #    saved = cur.fetchone()
+#                #    if saved:
+#                #        marker_coocurrences[(w1,w2)] += int(saved[2])
+#                    
+#                insert_values = []    
+#                for(w1,w2),c in marker_coocurrences.iteritems():
+#                    insert_values.append((w1,w2,c))#"coalesce(select occurrences FROM {0} WHERE pivot = '{1}' and context='{2}',0) + {3}".format(marker,w1.replace("'","''"),w2.replace("'","''"),c)))
+#                end_op = time.time()
+#                logger.debug('Retrieved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
+#                        .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
+#                start_op = time.time()
+#                query = "INSERT OR REPLACE INTO {0} VALUES( ?, ? ,?)".format(marker)
+#                try:
+#                    cur.executemany(query, insert_values)
+#                except sqlite3.OperationalError:
+#                    logger.error("Query Failed: {0)".format(query))
+#                    raise
+#                end_op = time.time()
+#                logger.debug('Saved values for marker {0}. Time consumed={1:.2f}s. Rec/s={2:.2f}'\
+#                        .format(marker, end_op-start_op, len(marker_coocurrences)/(end_op-start_op)))
+#                #clear from memory
+#                del counter.coocurrences[marker]
+#        con.commit()
+#        con.close()
     def save(self, counter):
         timeout = 60*60*2 #infinite
         con = sqlite3.connect(self.output_db,timeout,isolation_level="EXCLUSIVE")

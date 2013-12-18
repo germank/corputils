@@ -18,20 +18,71 @@ def load_words(filename):
         pivots.add(line.strip(' \t\n'))
     return pivots
 
-def build_matchers(args):
+def get_composition_matchers(args):
     '''
-    Returns a list of matchers based on the specification described in args.
+    Represent a list of matchers based on the specification described in args.
     The specification is currently strongly coupled with the command arguments
     that both dpgrep and print_directional_bigrams take (ugly, but useful)
     '''
     match_funcs = []
     if args.linear_comp:
-        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.to_lower))
-    
-    if args.deprel or args.depword or args.deppos or args.depfile or args.headword or args.headpos or args.headfile:
-        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.depword, args.deppos, args.depfile, 
-                 args.headword, args.headpos, args.headfile))
+        match_funcs.append(PeripheralLinearBigramMatcher(args.linear_comp, ignore_case=args.ignore_case, token_sep=args.token_sep))
+
+    if args.deprel or args.depword or args.deppos or args.depfile or args.headword or args.headpos or args.headfile or args.deplemma or args.headlemma:
+        match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.depword, args.deplemma, args.deppos, args.depfile, 
+        args.headword, args.headlemma, args.headpos, args.headfile,
+        args.target_format), token_sep=args.token_sep)
     return match_funcs
+
+class Match(object):
+    '''
+    represents a subset of a sentence.
+    '''
+    def __init__(self, tokens, tokens_annot = None, token_sep ='<-->'):
+        '''
+            tokens: the set of tokens we are representing
+            tokens_annot: a dictionary of token->string to add some extra
+            information (e.g. "target")
+        '''
+        self.tokens = tokens
+        self.tokens_annot = tokens_annot if tokens_annot else {}
+        self.token_sep = token_sep
+
+    def has_marker(self, token, marker):
+        return token in self.tokens_annot and marker ==\
+            self.token_markers[token]
+
+    def format(self, fmt):
+        return self.token_sep.join(t.format(fmt) for t in self.tokens)
+
+    def __repr__(self):
+            return "Match({0})".format(self.tokens)
+
+    def __hash__(self):
+        try:
+            return self._hash
+        except:
+            self._hash = hash(self.tokens)
+            return self._hash
+
+    def __eq__(self, ot):
+        return self.tokens == ot.tokens
+
+
+class UnigramMatcher():
+    '''Matches single tokens for the core space'''
+
+    def __init__(self, allowed_fwords=None, fwords_fmt=None):
+        self.allowed_fwords = allowed_fwords
+        self.fwords_fmt = fwords_fmt
+
+    def get_matches(self, sentence):
+        for token in sentence:
+            if self.allowed_fwords and token.format(self.fwords_fmt) not in \
+                self.allowed_fwords:
+                continue
+            yield Match((token,))
+            
 
 class PeripheralLinearBigramMatcher():
     '''Match phrases based on a pseudo-regular expression.
@@ -39,9 +90,10 @@ class PeripheralLinearBigramMatcher():
     take as optional arguments "word" and "pos". 
     E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>'''
 
-    def __init__(self, linear_comp, ignore_case=False):
+    def __init__(self, linear_comp, ignore_case=False, token_sep='<-->'):
         if not linear_comp:
             self.linear_comp_match = None
+        self.token_sep = token_sep
         def token_expr(expr):
             '''Auxiliary function that returns a regular expression
             that matches tokens in the corpus the specification
@@ -75,13 +127,13 @@ class PeripheralLinearBigramMatcher():
         #print list(filter(bool,re.split(r'(T<.*?>)', linear_comp)))
         #re.sub(r'T<(.*)>'
         #linear_comp = r"\|".join(filter(bool,re.split(r'(T<.*?>)', linear_comp)))
-        expr = re.sub(r'T<(.*?)>', lambda m:r"\|({0})\|".format(token_expr(m.group(1))), linear_comp)
+        expr = re.sub(r'T<(.*?)>', lambda m:r"(\|{0}\|)".format(token_expr(m.group(1))), linear_comp)
         self.expr = expr
         self.linear_comp_match = re.compile(expr, flags=re.IGNORECASE if
         ignore_case else 0 )
     
-    def get_matches(self, sentence, plain_text_sentence):
-        ret = []
+    def get_matches(self, sentence):
+        plain_text_sentence = sentence.plain_text
         if self.linear_comp_match:
             #we transform the sentence into a string
             sep = "||"
@@ -96,38 +148,41 @@ class PeripheralLinearBigramMatcher():
                 #obtain the matched tokens
                 left_match_pos = token_start2pos[m.start(0)]
                 right_match_pos = token_end2pos[m.end(0)]
-                ret.append(tuple(sentence[left_match_pos:right_match_pos+1]))
-        return ret
+                yield Match(tuple(sentence.linear()[left_match_pos:right_match_pos+1]), 
+                            token_sep=self.token_sep)
 
 class PeripheralDependencyBigramMatcher():
-    def __init__(self, deprel, depword, deppos, depfile, headword, headpos, headfile):
+    def __init__(self, deprel, depword, deplemma, deppos, depfile, headword, headlemma, 
+    headpos, headfile, filefmt, token_sep='<-->'):
         '''Matches bigrams across dependency arcs'''
         self.reprel = deprel
-        self.dep_comp_match = self._build_composition_match_func(depword, deppos, depfile)
-        self.head_comp_match = self._build_composition_match_func(headword, headpos, headfile)
+        self.token_sep = token_sep
+        self.dep_comp_match = self._build_composition_match_func(depword, deplemma, 
+        deppos, depfile, filefmt)
+        self.head_comp_match = self._build_composition_match_func(headword, headlemma, headpos, 
+        headfile, filefmt)
+        
     
     def composition_target(self,  dep_t, sentence):
         '''If dep_t is a matching left node, then return
         the node which is dependent upon'''
-        print sentence
-        if self.dep_comp_match(dep_t) and dep_t[4] > 0:
-            if self.reprel and not re.match(self.reprel, dep_t[5]):
+        if self.dep_comp_match(dep_t) and dep_t['dep_id'] != '0':
+            if self.reprel and not re.match(self.reprel, dep_t['dep_rel']):
                 return None
-            head_t = sentence[dep_t[4]-1]
-            assert head_t[3] == dep_t[4], (dep_t, head_t)
+            head_t = sentence[dep_t['dep_id']]
+            assert head_t['id'] == dep_t['dep_id'], (dep_t, head_t)
             if self.head_comp_match(head_t):
                 return head_t
+
         return None
 
-    def get_matches(self, sentence, _):
-        comp_matches = []
+    def get_matches(self, sentence):
         for i, dep_t in enumerate(sentence): #i,t = index,tuple in sentence
             head_t = self.composition_target(dep_t, sentence)
             if head_t:
-                comp_matches.append((dep_t,head_t))
-        return comp_matches
+                yield Match((dep_t,head_t), token_sep=self.token_sep)
 
-    def _build_composition_match_func(self, word_regexp, pos_regexp, wordset_file):
+    def _build_composition_match_func(self, word_regexp, lemma_regexp, pos_regexp, wordset_file, wordset_fmt):
         '''
         Returns a function that selects tokens in a DP.
         The criteria for the selection can be determined according to a regexp,
@@ -139,27 +194,33 @@ class PeripheralDependencyBigramMatcher():
         if word_regexp:
             word_regexp_func = re.compile(word_regexp, re.I).match
             if match_func:
-                match_func = partial(lambda f, w: f(w) and word_regexp_func(w[1]),
+                match_func = partial(lambda f, w: f(w) and word_regexp_func(w['word']),
                     match_func)
             else:
-                match_func = lambda w: word_regexp_func(w[1])
+                match_func = lambda w: word_regexp_func(w['word'])
+        if lemma_regexp:
+            lemma_regexp_func = re.compile(lemma_regexp, re.I).match
+            if match_func:
+                match_func = partial(lambda f, w: f(w) and lemma_regexp_func(w['lemma']),
+                    match_func)
+            else:
+                match_func = lambda w: lemma_regexp_func(w['lemma'])
         if pos_regexp:
             pos_regexp_func = re.compile(pos_regexp, re.I).match
             if match_func:
-                match_func = partial(lambda f, w: f(w) and pos_regexp_func(w[2]),
+                match_func = partial(lambda f, w: f(w) and pos_regexp_func(w['pos']),
                     match_func)
             else:
-                match_func = lambda w: pos_regexp_func(w[2])
+                match_func = lambda w: pos_regexp_func(w['pos'])
         if wordset_file:
             wordset = load_words(wordset_file)
             in_wordset = wordset.__contains__
             if match_func:
-                #FIXME: by using the index -2 we are referring to the formatted
-                #element. Bug or feature?
-                match_func = partial(lambda f, w: f(w) and in_wordset(w[-2]),
+                match_func = partial(lambda f, w: f(w) and
+                    in_wordset(w.format(wordset_fmt)),
                     match_func)
             else:
-                match_func = lambda w: in_wordset(w[-2])
+                match_func = lambda w: in_wordset(w.format(wordset_fmt))
     
         if match_func:
             return match_func
