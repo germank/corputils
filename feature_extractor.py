@@ -1,4 +1,11 @@
 import logging
+import re
+
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
 
 class TargetsFeaturesExtractor():
     '''
@@ -15,6 +22,20 @@ class TargetsFeaturesExtractor():
     def __call__(self, corpus_reader):
         matchers = self.matchers
         feature_extractor = self.feature_extrator
+        #FIXME: put in some better place
+        if self.targets:
+            try:
+                #be ambitious!
+                grp_targets = ["|".join(chnk) for chnk in chunks(list(self.targets),1000)]
+            except:
+                #surrender to mediocrity!
+                grp_targets = ["|".join(chnk) for chnk in chunks(list(self.targets),100)]
+            targets_re = [re.compile(w) for w in grp_targets]
+            targets_filter = lambda w,targets_re=targets_re: any(m.match(w) 
+                            for m in targets_re)
+        else:
+            targets_filter = None
+            
         #a chunk is usually a sentence (we cannot get features passed the chunk)
         for chunk in corpus_reader:
             try:
@@ -22,13 +43,15 @@ class TargetsFeaturesExtractor():
                 for matcher in matchers:
                     for target in matcher.get_matches(chunk):
                         #skip targets that are not in the specified list
-                        if self.targets and \
-                            not target.format(self.target_format) in self.targets:
+                        if targets_filter and \
+                            not targets_filter(target.format(self.target_format)):
                             continue
                         for feature in feature_extractor.get_features(target, chunk):
                             if (target, feature) not in seen_pairs:
                                 seen_pairs.add((target,feature))
                                 yield target, feature
+            except IOError:
+                raise
             except StandardError:
                 logging.exception("Error while processing sentence: {0}".format(
                     chunk))

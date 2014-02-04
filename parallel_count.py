@@ -5,6 +5,7 @@ import sys
 import logging
 import os
 import random
+from clutils.config_loader import nodenames 
 from sentence_matchers import *
 from feature_extractor import *
 from count_pipeline import StreamingCountPipeline, CountSumPipeline
@@ -45,9 +46,8 @@ def main():
     'formatted as specified by -cf)')
     parser.add_argument('-i', '--ignore_case', default=False, action='store_true',
         help='ignore case on match patterns')
-    #DISABLED
-    #parser.add_argument('--to-lower', default=False, action='store_true',
-    #    help='transform words and lemmas to lowercase')
+    parser.add_argument('--to-lower', default=False, action='store_true',
+        help='transform words and lemmas to lowercase')
     parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
                         help="format used for the target. Variables are "
                         "{word}, {lemma}, {pos} and {cat}")
@@ -108,12 +108,16 @@ def main():
     #FIXME: move to config.yml
     config = {
         '*': {
-            'h_cpu': '24:0:0'
+            'h_cpu': '24:0:0',
+            'hosts': nodenames('compute-0-[1-9]|compute-1-[1-9]')
         },
         'count_matches': {
-            'h_vmem': '7G',
-            'h_cpu': '8:0:0'
+            'h_vmem': '7G'
+        },
+        'sum_matches': {
+            'h_vmem': '120G'
         }
+              
     }
     #pipeline = StreamingCountPipeline('compute-0-1', 17160,#random.randint(2000,32767), 
     #    os.path.join(os.getcwd(), args.output), targets_features_extractor, 
@@ -121,7 +125,7 @@ def main():
     pipeline = CountSumPipeline( 
         os.path.join(os.getcwd(), args.output), targets_features_extractor, 
         args.corpora, args.gzip, args.target_format, args.context_format,
-        args.separator)
+        args.separator, args.to_lower)
     pipeline.run(debug=args.debug, resume=args.resume, config=config)
 
         

@@ -47,13 +47,14 @@ class Token(object):
 
 from collections import OrderedDict
 class Sentence(object):
-    def __init__(self, corp_format, corp_types) :
+    def __init__(self, corp_format, corp_types, to_lower) :
         self.tokens = OrderedDict()
         self.linear_tokens = []
         #self.rev_linear_tokens = {}
         self.plain_text = []
         self.corp_format = corp_format
         self.corp_types = corp_types
+        self.to_lower = to_lower
 
     def push_token(self, line, splitted_line=None):
         self.plain_text.append(line)
@@ -62,6 +63,9 @@ class Sentence(object):
         else:
             t = splitted_line
         data = dict(zip(self.corp_format, t))
+        if self.to_lower:
+            data['word'] = data['word'].lower()
+            data['lemma'] = data['lemma'].lower()
         for k,conv in self.corp_types:
             data[k] = conv(data[k])
         token = Token(weakref.proxy(self), data)
@@ -93,19 +97,20 @@ class DPCorpusReader(object):
     '''
     Reads sentences from dependency parsed corpora
     '''
-    def __init__(self, corpora, sentence_filter=None, separator='s'):
+    def __init__(self, corpora, sentence_filter=None, separator='s', to_lower=False):
         self.end_separator = '/{0}'.format(separator)
         self.corpora = corpora
         self.corp_format = ('word', 'lemma', 'pos', 'id', 'dep_id',
             'dep_rel')
         self.corp_types = {}#{'id': int, 'dep_id': int} #is it needed?
         self.sentence_filter = sentence_filter
+        self.to_lower = to_lower
 
     def __iter__(self):
         return self
 
     def next(self):
-        sentence = Sentence(self.corp_format, self.corp_types)
+        sentence = Sentence(self.corp_format, self.corp_types, self.to_lower)
         for line in self.corpora:
             line = line.rstrip('\n')
             if line.strip('<>') == self.end_separator:

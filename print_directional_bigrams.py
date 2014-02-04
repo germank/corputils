@@ -39,8 +39,8 @@ def main():
     parser.add_argument('-i', '--ignore_case', default=False, action='store_true',
         help='ignore case on match patterns')
     #DISABLED
-    #parser.add_argument('--to-lower', default=False, action='store_true',
-    #    help='transform words and lemmas to lowercase')
+    parser.add_argument('--to-lower', default=False, action='store_true',
+        help='transform words and lemmas to lowercase')
     parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
                         help="format used for the target. Variables are "
                         "{word}, {lemma}, {pos} and {cat}")
@@ -102,7 +102,8 @@ def main():
         
     corpus_reader = DPCorpusReader(input_corpora,
                                    sentence_filter=sentence_filter,
-                                   separator=args.separator)
+                                   separator=args.separator,
+                                   to_lower=args.to_lower)
 
     #print directional bigrams
     for target, feature in targets_features_extractor(corpus_reader):
