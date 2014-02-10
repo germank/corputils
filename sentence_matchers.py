@@ -31,7 +31,8 @@ def get_composition_matchers(args):
     if args.deprel or args.depword or args.deppos or args.depfile or args.headword or args.headpos or args.headfile or args.deplemma or args.headlemma:
         match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.depword, args.deplemma, args.deppos, args.depfile, 
         args.headword, args.headlemma, args.headpos, args.headfile,
-        args.target_format), token_sep=args.token_sep)
+        args.target_format, token_sep=args.token_sep))
+    print match_funcs
     return match_funcs
 
 class Match(object):
@@ -157,10 +158,27 @@ class PeripheralDependencyBigramMatcher():
         '''Matches bigrams across dependency arcs'''
         self.reprel = deprel
         self.token_sep = token_sep
-        self.dep_comp_match = self._build_composition_match_func(depword, deplemma, 
-        deppos, depfile, filefmt)
-        self.head_comp_match = self._build_composition_match_func(headword, headlemma, headpos, 
-        headfile, filefmt)
+        self.deprel = deprel
+        self.depword = depword
+        self.deplemma = deplemma
+        self.deppos = deppos
+        self.depfile = depfile
+        self.headword = headword
+        self.headlemma = headlemma 
+        self.headpos = headpos
+        self.headfile = headfile
+        self.filefmt = filefmt
+        self.dep_comp_match = None
+        self.head_comp_match = None
+
+    def lazy_init(self):
+        if not self.dep_comp_match:
+            self.dep_comp_match = \
+            self._build_composition_match_func(self.depword, self.deplemma, 
+            self.deppos, self.depfile, self.filefmt)
+            self.head_comp_match =\
+            self._build_composition_match_func(self.headword, self.headlemma,
+            self.headpos, self.headfile, self.filefmt)
         
     
     def composition_target(self,  dep_t, sentence):
@@ -177,6 +195,7 @@ class PeripheralDependencyBigramMatcher():
         return None
 
     def get_matches(self, sentence):
+        self.lazy_init()
         for i, dep_t in enumerate(sentence): #i,t = index,tuple in sentence
             head_t = self.composition_target(dep_t, sentence)
             if head_t:

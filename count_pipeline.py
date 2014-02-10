@@ -75,7 +75,8 @@ class CountMatches(JobModule):
         logging.info("CountMatches({0}): starting "
         "counting".format(self.work_path))
         #FIXME parametrixe
-        sentence_filter = lambda t: t[2][0] in 'NJVR'
+        #sentence_filter = lambda t: t[2][0] in 'NJVR'
+        sentence_filter = None
         
         corpus_reader = DPCorpusReader(self['corpus'].read(), 
                                        sentence_filter=sentence_filter,
