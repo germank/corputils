@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 import argparse
-import fileinput
 import sys
 import logging
+from sentence_matchers import PeripheralLinearBigramMatcher, UnigramMatcher,\
+    get_composition_matchers
+from feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
+logging.basicConfig(level=logging.INFO)
 import os
-import random
-from clutils.config_loader import nodenames 
-from sentence_matchers import *
-from feature_extractor import *
-from count_pipeline import StreamingCountPipeline, CountSumPipeline
+from clutils.config_loader import nodenames , load_config
+from count_pipeline import CountSumPipeline
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -18,6 +18,7 @@ def main():
     Pivots = Context Words''')
     parser.add_argument('corpora', help='files with the parsed corpora',
         nargs='+')
+    parser.add_argument('-C', '--config', default='config.yml')
     parser.add_argument('-D', '--debug', action='store_true', default=False,
     help="runs in local multithreading mode")
     parser.add_argument('--resume', action='store_true', default=False,
@@ -32,9 +33,8 @@ def main():
     "separator (default=s)")
     parser.add_argument('-x', '--token_sep', default='<-->', help="token "
     "separator for composed bigrams (e.g. red-j<-->car-n)")
-    #temporarly disabled
-    #parser.add_argument('-d', '--disjoint', help='disjoint context for core and peripheral',
-    #                    action='store_true')
+    parser.add_argument('--only-content', help='Filter out all words with the ' 
+                        'first letter of the POS not in "NJVR"')
     parser.add_argument('-p', '--pivots', metavar='FILE', help='filter output '
     'pivots by those specified in the file (line-separated list of elements '
     'formatted as specified by -tf)')
@@ -54,7 +54,10 @@ def main():
     parser.add_argument('-cf', '--context-format', default='{lemma}-{cat}', 
                         help="format used for the context. Variables are "
                         "{word}, {lemma}, {pos} and {cat}")
-    parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__doc__)
+    parser.add_argument('--linear_comp', help='''Match phrases based on a pseudo-regular expression.
+    Each token is represented with a T<> marker which can 
+    take as optional arguments "word" and "pos". 
+    E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>''')
     parser.add_argument('-dr', '--deprel', help='Dependency arc marching: specify the '
     'relation tag name')
     parser.add_argument('-dw','--depword', help='Dependency arc matching: left word regexp')
@@ -104,28 +107,25 @@ def main():
                                                           args.target_format,
                                                           args.context_format,
                                                           targets)
-
-    #FIXME: move to config.yml
-    config = {
-        '*': {
-            'h_cpu': '24:0:0',
-            'hosts': nodenames('compute-0-[1-9]|compute-1-[1-9]')
-        },
-        'count_matches': {
-            'h_vmem': '7G'
-        },
-        'sum_matches': {
-            'h_vmem': '120G'
-        }
-              
-    }
+    sys.stdout.write("Trying to load config from {0}... ".format(args.config))
+    config = load_config(args.config)
+    if config:
+        print "OK"
+    else:
+        print "Error (using defaults)"
+        
+    if args.only_content:
+        sentence_filter = lambda t: t[2][0] in 'NJVR'
+    else:
+        sentence_filter = None
+    
     #pipeline = StreamingCountPipeline('compute-0-1', 17160,#random.randint(2000,32767), 
     #    os.path.join(os.getcwd(), args.output), targets_features_extractor, 
     #    args.corpora, args.gzip, args.target_format, args.context_format)
     pipeline = CountSumPipeline( 
         os.path.join(os.getcwd(), args.output), targets_features_extractor, 
         args.corpora, args.gzip, args.target_format, args.context_format,
-        args.separator, args.to_lower)
+        args.separator, sentence_filter, args.to_lower)
     pipeline.run(debug=args.debug, resume=args.resume, config=config)
 
         
