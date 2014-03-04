@@ -97,13 +97,12 @@ class DPCorpusReader(object):
     '''
     Reads sentences from dependency parsed corpora
     '''
-    def __init__(self, corpora, sentence_filter=None, separator='s', to_lower=False):
+    def __init__(self, corpora, separator='s', to_lower=False):
         self.end_separator = '/{0}'.format(separator)
         self.corpora = corpora
         self.corp_format = ('word', 'lemma', 'pos', 'id', 'dep_id',
             'dep_rel')
         self.corp_types = {}#{'id': int, 'dep_id': int} #is it needed?
-        self.sentence_filter = sentence_filter
         self.to_lower = to_lower
 
     def __iter__(self):
@@ -120,7 +119,5 @@ class DPCorpusReader(object):
                 continue 
             else:
                 splitted_line = line.split("\t")
-                if not self.sentence_filter or \
-                self.sentence_filter(splitted_line): 
-                    sentence.push_token(line, splitted_line)
+                sentence.push_token(line, splitted_line)
         raise StopIteration

@@ -13,28 +13,32 @@ class TargetsFeaturesExtractor():
     '''
     def __init__(self, matchers, feature_extractor, target_format,
                  context_format, targets):
+        '''
+        targets: is a dictionary of the position inside a target ngram (1,2,...)
+        to a set of words that are valid matches
+        '''
         self.matchers = matchers
         self.feature_extrator = feature_extractor
         self.target_format = target_format
         self.context_format = context_format
         self.targets = targets
 
+
+    def skip_target(self, target):
+        if len(target) not in self.targets:
+            return False
+        target_validators = self.targets[len(target)]
+        #for each position based filter given
+        for target_pos, valid_items in target_validators.iteritems():
+        #skip the target if the the word in position
+        #target_pos is not in the valid_items list
+            if target[target_pos - 1].format(self.target_format) not in valid_items:
+                return True
+        return False
+
     def __call__(self, corpus_reader):
         matchers = self.matchers
         feature_extractor = self.feature_extrator
-        #FIXME: put in some better place
-        if self.targets:
-            try:
-                #be ambitious!
-                grp_targets = ["|".join(chnk) for chnk in chunks(list(self.targets),1000)]
-            except:
-                #surrender to mediocrity!
-                grp_targets = ["|".join(chnk) for chnk in chunks(list(self.targets),100)]
-            targets_re = [re.compile(w) for w in grp_targets]
-            targets_filter = lambda w,targets_re=targets_re: any(m.match(w) 
-                            for m in targets_re)
-        else:
-            targets_filter = None
             
         #a chunk is usually a sentence (we cannot get features passed the chunk)
         for chunk in corpus_reader:
@@ -43,9 +47,9 @@ class TargetsFeaturesExtractor():
                 for matcher in matchers:
                     for target in matcher.get_matches(chunk):
                         #skip targets that are not in the specified list
-                        if targets_filter and \
-                            not targets_filter(target.format(self.target_format)):
-                            continue
+                        #of valid targets
+                        if self.skip_target(target):
+                                continue
                         for feature in feature_extractor.get_features(target, chunk):
                             if (target, feature) not in seen_pairs:
                                 seen_pairs.add((target,feature))

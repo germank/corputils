@@ -11,6 +11,7 @@ import fileinput
 import re
 from functools import partial
 from itertools import repeat
+import logging
 
 def load_words(filename):
     pivots = set()
@@ -32,7 +33,6 @@ def get_composition_matchers(args):
         match_funcs.append(PeripheralDependencyBigramMatcher(args.deprel, args.depword, args.deplemma, args.deppos, args.depfile, 
         args.headword, args.headlemma, args.headpos, args.headfile,
         args.target_format, token_sep=args.token_sep))
-    print match_funcs
     return match_funcs
 
 class Match(object):
@@ -55,6 +55,12 @@ class Match(object):
 
     def format(self, fmt):
         return self.token_sep.join(t.format(fmt) for t in self.tokens)
+
+    def __len__(self):
+        return len(self.tokens)
+    
+    def __getitem__(self, k):
+        return self.tokens[k]
 
     def __repr__(self):
             return "Match({0})".format(self.tokens)
@@ -187,10 +193,14 @@ class PeripheralDependencyBigramMatcher():
         if self.dep_comp_match(dep_t) and dep_t['dep_id'] != '0':
             if self.reprel and not re.match(self.reprel, dep_t['dep_rel']):
                 return None
-            head_t = sentence[dep_t['dep_id']]
-            assert head_t['id'] == dep_t['dep_id'], (dep_t, head_t)
-            if self.head_comp_match(head_t):
-                return head_t
+            try:
+                head_t = sentence[dep_t['dep_id']]
+                assert head_t['id'] == dep_t['dep_id'], (dep_t, head_t)
+                if self.head_comp_match(head_t):
+                    return head_t
+            except KeyError:
+                logging.warn("Dangling reference at sentence: {0} in token {1}".format(sentence, dep_t))
+                return None
 
         return None
 

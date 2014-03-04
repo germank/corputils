@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 import argparse
 import sys
-import logging
-from sentence_matchers import PeripheralLinearBigramMatcher, UnigramMatcher,\
-    get_composition_matchers
-from feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
-logging.basicConfig(level=logging.INFO)
 import os
-from clutils.config_loader import nodenames , load_config
-from count_pipeline import CountSumPipeline
+import logging
+logging.basicConfig(level=logging.INFO)
+
+from core.sentence_matchers import PeripheralLinearBigramMatcher, UnigramMatcher,\
+    get_composition_matchers
+from core.feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
+from core.count_pipeline import CountSumPipeline
+
+from clutils.config_loader import load_config
+
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -34,13 +37,20 @@ def main():
     parser.add_argument('-x', '--token_sep', default='<-->', help="token "
     "separator for composed bigrams (e.g. red-j<-->car-n)")
     parser.add_argument('--only-content', help='Filter out all words with the ' 
-                        'first letter of the POS not in "NJVR"')
-    parser.add_argument('-p', '--pivots', metavar='FILE', help='filter output '
-    'pivots by those specified in the file (line-separated list of elements '
-    'formatted as specified by -tf)')
-    parser.add_argument('-t', '--targets', metavar='FILE', help='filter output '
-    'targets by those specified in the file (line-separated list of elements '
-    'formatted as specified by -tf)')
+                        'first letter of the POS not in "NJVR"', 
+                        action='store_true', default=False)
+    parser.add_argument('-t0', '--targets0', metavar='FILE', help='filter output '
+    'unigram targets for which the lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
+    parser.add_argument('-t1', '--targets1', metavar='FILE', help='filter output '
+    'bigram targets for which the 1st lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
+    parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
+    'bigram targets for which the 1st lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
+    parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
+    'targets for which the 1st lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-c', '--contexts', metavar='FILE', help='filter output '
     'context features by those specified in the file (line-separated list of elements '
     'formatted as specified by -cf)')
@@ -75,24 +85,35 @@ def main():
 
     args = parser.parse_args()
     w = args.window_size
-    if args.pivots:
-        pivot_words = set(w.strip() for w in file(args.pivots))
-    else:
-        pivot_words = None
+    
+    targets = {}
+    #Target unigrams filter
+    targets[1] = {}
+    if args.targets0:
+        targets[1][1] = set(w.strip() for w in file(args.targets0))
+
+    
+
+    targets[2] = {}
+    if args.targets1:
+        targets[2][1] = set(w.strip() for w in file(args.targets1))
+        
+    if args.targets2:
+        targets[2][2] = set(w.strip() for w in file(args.targets2))
+        
+        
     if args.contexts:
         contexts_words = set(w.strip() for w in file(args.contexts))
     else:
         contexts_words = None
     
-    if args.targets:
-        targets = set(w.strip() for w in file(args.targets))
-    else:
-        targets = None
 
+
+    
     #FIXME: Matchers don't need to know target format (move filters to
     #TargetsFeaturesExtractor
     #create a matcher for the core space
-    matchers = [UnigramMatcher(pivot_words, args.target_format)]
+    matchers = [UnigramMatcher(None, args.target_format)]
     #build functions that match a peripheral bigram
     matchers.extend(get_composition_matchers(args) )
     #FIXME: FeatureExtractors don't need to know target format (move filters to
@@ -107,25 +128,19 @@ def main():
                                                           args.target_format,
                                                           args.context_format,
                                                           targets)
-    sys.stdout.write("Trying to load config from {0}... ".format(args.config))
-    config = load_config(args.config)
-    if config:
-        print "OK"
-    else:
-        print "Error (using defaults)"
-        
-    if args.only_content:
-        sentence_filter = lambda t: t[2][0] in 'NJVR'
-    else:
-        sentence_filter = None
-    
+    try:
+        config = load_config(args.config)
+    except:
+        print "Error while trying to load configuration file {0}".format(args.config)
+        raise
+
     #pipeline = StreamingCountPipeline('compute-0-1', 17160,#random.randint(2000,32767), 
     #    os.path.join(os.getcwd(), args.output), targets_features_extractor, 
     #    args.corpora, args.gzip, args.target_format, args.context_format)
     pipeline = CountSumPipeline( 
         os.path.join(os.getcwd(), args.output), targets_features_extractor, 
         args.corpora, args.gzip, args.target_format, args.context_format,
-        args.separator, sentence_filter, args.to_lower)
+        args.separator, args.to_lower)
     pipeline.run(debug=args.debug, resume=args.resume, config=config)
 
         

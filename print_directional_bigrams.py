@@ -1,13 +1,17 @@
 #!/usr/bin/env python
 
 import argparse
-import fileinput
 import sys
-import itertools
 import logging
-from sentence_matchers import *
-from feature_extractor import *
-from readers import DPCorpusReader
+import itertools
+import fileinput
+from core.readers import DPCorpusReader
+from core.aux import gziplines
+logging.basicConfig(level=logging.INFO)
+
+from core.sentence_matchers import UnigramMatcher,\
+    get_composition_matchers
+from core.feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -27,12 +31,15 @@ def main():
     #temporarly disabled
     #parser.add_argument('-d', '--disjoint', help='disjoint context for core and peripheral',
     #                    action='store_true')
-    parser.add_argument('-p', '--pivots', metavar='FILE', help='filter output '
-    'pivots by those specified in the file (line-separated list of elements '
-    'formatted as specified by -tf)')
-    parser.add_argument('-t', '--targets', metavar='FILE', help='filter output '
-    'targets by those specified in the file (line-separated list of elements '
-    'formatted as specified by -tf)')
+    parser.add_argument('-t0', '--targets0', metavar='FILE', help='filter output '
+    'unigram targets for which the lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
+    parser.add_argument('-t1', '--targets1', metavar='FILE', help='filter output '
+    'bigram targets for which the 1st lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
+    parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
+    'bigram targets for which the 1st lexical item is not in the provided list '
+    '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-c', '--contexts', metavar='FILE', help='filter output '
     'context features by those specified in the file (line-separated list of elements '
     'formatted as specified by -cf)')
@@ -47,7 +54,10 @@ def main():
     parser.add_argument('-cf', '--context-format', default='{lemma}-{cat}', 
                         help="format used for the context. Variables are "
                         "{word}, {lemma}, {pos} and {cat}")
-    parser.add_argument('--linear_comp', help=PeripheralLinearBigramMatcher.__doc__)
+    parser.add_argument('--linear_comp', help='''Match phrases based on a pseudo-regular expression.
+    Each token is represented with a T<> marker which can 
+    take as optional arguments "word" and "pos". 
+    E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>''')
     parser.add_argument('-dr', '--deprel', help='Dependency arc marching: specify the '
     'relation tag name')
     parser.add_argument('-dw','--depword', help='Dependency arc matching: left word regexp')
@@ -65,22 +75,29 @@ def main():
 
     args = parser.parse_args()
     w = args.window_size
-    if args.pivots:
-        pivot_words = set(w.strip() for w in file(args.pivots))
-    else:
-        pivot_words = None
+    
+    targets = {}
+    #Target unigrams filter
+    targets[1] = {}
+    if args.targets0:
+        targets[1][1] = set(w.strip() for w in file(args.targets0))
+
+    
+
+    targets[2] = {}
+    if args.targets1:
+        targets[2][1] = set(w.strip() for w in file(args.targets1))
+        
+    if args.targets2:
+        targets[2][2] = set(w.strip() for w in file(args.targets2))
+        
     if args.contexts:
         contexts_words = set(w.strip() for w in file(args.contexts))
     else:
         contexts_words = None
-
-    if args.targets:
-        targets = set(w.strip() for w in file(args.targets))
-    else:
-        targets = None
         
     #create a matcher for the core space
-    matchers = [UnigramMatcher(pivot_words, args.target_format)]
+    matchers = [UnigramMatcher(None, args.target_format)]
     #build functions that match a peripheral bigram
     matchers.extend(get_composition_matchers(args) )
     #define the kind of features we want to extract
@@ -92,8 +109,6 @@ def main():
                                                           args.target_format,
                                                           args.context_format,
                                                           targets)
-    #FIXME: parametrize
-    sentence_filter = lambda t: t[2][0] in 'NJVR'
     #open corpus
     if args.gzip:
         input_corpora = itertools.chain(*map(gziplines, args.corpora))
@@ -101,7 +116,6 @@ def main():
         input_corpora = fileinput.FileInput(args.corpora)
         
     corpus_reader = DPCorpusReader(input_corpora,
-                                   sentence_filter=sentence_filter,
                                    separator=args.separator,
                                    to_lower=args.to_lower)
 
@@ -112,12 +126,6 @@ def main():
 
         
 
-def gziplines(fname):
-    from subprocess import Popen, PIPE
-    f = Popen(['zcat' ] + [fname], stdout=PIPE)
-    for line in f.stdout:
-        yield line
-        
 if __name__ == '__main__':
     try:
         main()
