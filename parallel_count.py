@@ -5,10 +5,10 @@ import os
 import logging
 logging.basicConfig(level=logging.INFO)
 
-from core.sentence_matchers import PeripheralLinearBigramMatcher, UnigramMatcher,\
+from corputils.core.sentence_matchers import PeripheralLinearBigramMatcher, UnigramMatcher,\
     get_composition_matchers
-from core.feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
-from core.count_pipeline import CountSumPipeline
+from corputils.core.feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
+from corputils.core.count_pipeline import CountSumPipeline
 
 from clutils.config_loader import load_config
 
@@ -47,9 +47,6 @@ def main():
     '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
     'bigram targets for which the 1st lexical item is not in the provided list '
-    '(line-separated list of elements formatted as specified by -tf)')
-    parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
-    'targets for which the 1st lexical item is not in the provided list '
     '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-c', '--contexts', metavar='FILE', help='filter output '
     'context features by those specified in the file (line-separated list of elements '
@@ -90,20 +87,20 @@ def main():
     #Target unigrams filter
     targets[1] = {}
     if args.targets0:
-        targets[1][1] = set(w.strip() for w in file(args.targets0))
+        targets[1][1] = args.targets0
 
     
 
     targets[2] = {}
     if args.targets1:
-        targets[2][1] = set(w.strip() for w in file(args.targets1))
+        targets[2][1] = args.targets1
         
     if args.targets2:
-        targets[2][2] = set(w.strip() for w in file(args.targets2))
+        targets[2][2] = args.targets2
         
         
     if args.contexts:
-        contexts_words = set(w.strip() for w in file(args.contexts))
+        contexts_words = args.contexts
     else:
         contexts_words = None
     

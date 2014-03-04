@@ -5,13 +5,13 @@ import sys
 import logging
 import itertools
 import fileinput
-from core.readers import DPCorpusReader
-from core.aux import gziplines
+from corputils.core.readers import DPCorpusReader
+from corputils.core.aux import gziplines
 logging.basicConfig(level=logging.INFO)
 
-from core.sentence_matchers import UnigramMatcher,\
+from corputils.core.sentence_matchers import UnigramMatcher,\
     get_composition_matchers
-from core.feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
+from corputils.core.feature_extractor import BOWFeatureExtractor, TargetsFeaturesExtractor
 
 def main():
     parser = argparse.ArgumentParser(description=
@@ -119,6 +119,7 @@ def main():
                                    separator=args.separator,
                                    to_lower=args.to_lower)
 
+    targets_features_extractor.initialize()
     #print directional bigrams
     for target, feature in targets_features_extractor(corpus_reader):
         print "{0}\t{1}".format(target.format(args.target_format), 

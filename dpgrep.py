@@ -7,9 +7,9 @@ Created on Jun 12, 2013
 import argparse
 import fileinput
 
-from core.sentence_matchers import get_composition_matchers
-from core.readers import DPCorpusReader
-from core.aux import gziplines
+from corputils.core.sentence_matchers import get_composition_matchers
+from corputils.core.readers import DPCorpusReader
+from corputils.core.aux import gziplines
 import itertools
 import sys
 

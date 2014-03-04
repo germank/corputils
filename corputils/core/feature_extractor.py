@@ -23,6 +23,11 @@ class TargetsFeaturesExtractor():
         self.context_format = context_format
         self.targets = targets
 
+    def initialize(self):
+        self.feature_extrator.initialize()
+        for k,k_targets in self.targets.iteritems():
+            for i, filename in k_targets.iteritems():
+                self.targets[k][i] = set(w.strip() for w in file(filename))
 
     def skip_target(self, target):
         if len(target) not in self.targets:
@@ -99,6 +104,9 @@ class BOWFeatureExtractor(object):
         self.w = w 
         self.context_words = context_words
         self.context_format = context_format
+
+    def initialize(self):
+        self.context_words = set(w.strip() for w in file(self.context_words))
     
     def is_valid_feature(self, t):
         return not self.context_words or t.format(self.context_format) in\

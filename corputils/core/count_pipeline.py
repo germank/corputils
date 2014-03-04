@@ -13,7 +13,7 @@ class CountMatches(JobModule):
     def run(self, targets_features_extractor, corpus_file, gzip, 
         target_format, context_format, sentence_separator,
                   to_lower):
-        
+        targets_features_extractor.initialize()
         self['corpus'].open(corpus_file, gzip)
         logging.info("CountMatches({0}): starting "
         "counting".format(self))
