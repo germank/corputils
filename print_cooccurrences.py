@@ -45,7 +45,6 @@ def main():
     'formatted as specified by -cf)')
     parser.add_argument('-i', '--ignore_case', default=False, action='store_true',
         help='ignore case on match patterns')
-    #DISABLED
     parser.add_argument('--to-lower', default=False, action='store_true',
         help='transform words and lemmas to lowercase')
     parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
@@ -80,19 +79,19 @@ def main():
     #Target unigrams filter
     targets[1] = {}
     if args.targets0:
-        targets[1][1] = set(w.strip() for w in file(args.targets0))
+        targets[1][1] = args.targets0
 
     
 
     targets[2] = {}
     if args.targets1:
-        targets[2][1] = set(w.strip() for w in file(args.targets1))
+        targets[2][1] = args.targets1
         
     if args.targets2:
-        targets[2][2] = set(w.strip() for w in file(args.targets2))
+        targets[2][2] = args.targets2
         
     if args.contexts:
-        contexts_words = set(w.strip() for w in file(args.contexts))
+        contexts_words = args.contexts
     else:
         contexts_words = None
         

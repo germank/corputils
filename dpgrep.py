@@ -24,8 +24,10 @@ def main():
     "separator (default=s)")
     parser.add_argument('-x', '--token_sep', default='<-->', help="token "
     "separator for composed bigrams (e.g. red-j<-->car-n)")
-    parser.add_argument('--to-lower', '-i', default=False, action='store_true',
-        help='ignore lower/upper case differences')
+    parser.add_argument('-i', '--ignore_case', default=False, action='store_true',
+        help='ignore case on match patterns')
+    parser.add_argument('--to-lower', default=False, action='store_true',
+        help='transform words and lemmas to lowercase')
     parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
                         help="format used for the target. Variables are "
                         "{word}, {lemma}, {pos} and {cat}")

@@ -106,7 +106,8 @@ class BOWFeatureExtractor(object):
         self.context_format = context_format
 
     def initialize(self):
-        self.context_words = set(w.strip() for w in file(self.context_words))
+        if self.context_words:
+            self.context_words = set(w.strip() for w in file(self.context_words))
     
     def is_valid_feature(self, t):
         return not self.context_words or t.format(self.context_format) in\
