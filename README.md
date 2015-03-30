@@ -5,8 +5,8 @@ Utilities for manipulating text corpora
 
 Simple usage:
 
-./print_directional_bigrams.py bnc.xml | ./coocurrence_count.py -o output
+`./print_cooccurrences.py bnc.xml | ./coocurrence_count.py -o output`
 
 Run 
-`./print_directional_bigrams.py -h`
+`./print_cooccurrences.py -h`
 for a help message
