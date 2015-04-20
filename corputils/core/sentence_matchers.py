@@ -56,6 +56,9 @@ class Match(object):
     def format(self, fmt):
         return self.token_sep.join(t.format(fmt) for t in self.tokens)
 
+    def get_tokens(self):
+        return self.tokens
+
     def __len__(self):
         return len(self.tokens)
     
@@ -79,15 +82,11 @@ class Match(object):
 class UnigramMatcher():
     '''Matches single tokens for the core space'''
 
-    def __init__(self, allowed_fwords=None, fwords_fmt=None):
-        self.allowed_fwords = allowed_fwords
-        self.fwords_fmt = fwords_fmt
-
+    def __init__(self):
+        pass
+    
     def get_matches(self, sentence):
         for token in sentence:
-            if self.allowed_fwords and token.format(self.fwords_fmt) not in \
-                self.allowed_fwords:
-                continue
             yield Match((token,))
             
 

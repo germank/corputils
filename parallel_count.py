@@ -3,7 +3,7 @@ import argparse
 import sys
 import os
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 from corputils.core.sentence_matchers import PeripheralLinearBigramMatcher, UnigramMatcher,\
     get_composition_matchers
@@ -46,7 +46,7 @@ def main():
     'bigram targets for which the 1st lexical item is not in the provided list '
     '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
-    'bigram targets for which the 1st lexical item is not in the provided list '
+    'bigram targets for which the 2nd lexical item is not in the provided list '
     '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-c', '--contexts', metavar='FILE', help='filter output '
     'context features by those specified in the file (line-separated list of elements '
@@ -57,11 +57,13 @@ def main():
         help='transform words and lemmas to lowercase')
     parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
                         help="format used for the target. Variables are "
-                        "{word}, {lemma}, {pos} and {cat}")
+                        "{word}, {lemma}, {pos} and {cat} (default: {lemma}-{cat})")
     parser.add_argument('-cf', '--context-format', default='{lemma}-{cat}', 
                         help="format used for the context. Variables are "
-                        "{word}, {lemma}, {pos} and {cat}")
-    parser.add_argument('--linear_comp', help='''Match phrases based on a pseudo-regular expression.
+                        "{word}, {lemma}, {pos} and {cat} (default: {lemma}-{cat})")
+    parser.add_argument('--no-unigrams', action='store_true', default=False,
+                        help="Don't output features for unigram targets")
+    parser.add_argument('-l', '--linear-comp', help='''Match phrases based on a pseudo-regular expression.
     Each token is represented with a T<> marker which can 
     take as optional arguments "word" and "pos". 
     E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>''')
@@ -107,10 +109,10 @@ def main():
 
 
     
-    #FIXME: Matchers don't need to know target format (move filters to
-    #TargetsFeaturesExtractor
+    matchers = []
     #create a matcher for the core space
-    matchers = [UnigramMatcher(None, args.target_format)]
+    if not args.no_unigrams:
+        matchers.append(UnigramMatcher())
     #build functions that match a peripheral bigram
     matchers.extend(get_composition_matchers(args) )
     #FIXME: FeatureExtractors don't need to know target format (move filters to
@@ -119,7 +121,7 @@ def main():
     feature_extractor = BOWFeatureExtractor(args.window_size, contexts_words,
         args.context_format)
     #initialize extractor
-    #FIXME: TargetsFeatureExtractor is not a FeatureExtractor (find a better name)
+    #FIXME: TargetsFeaturesExtractor is not a FeaturesExtractor (find a better name)
     targets_features_extractor = TargetsFeaturesExtractor(matchers,
                                                           feature_extractor,
                                                           args.target_format,

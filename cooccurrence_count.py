@@ -9,6 +9,7 @@ logger = logging.getLogger()
 import argparse
 import fileinput
 import os
+import sys
 try:
     import sqlite3
 except ImportError:
@@ -125,16 +126,23 @@ def main():
 
         with Timer() as t_counting:
             try: 
+                i=0
                 for l in fileinput.input(args.input, 
                                          openhook=fileinput.hook_encoded("utf-8")):
-                    [w1,marker,w2] = l.rstrip('\n').split('\t')
+                    i+=1
+                    if i%100000 == 0:
+                        sys.stdout.write('.')
+                    if i%10000000 == 0:
+                        sys.stdout.write('\n')
+                    sys.stdout.flush()
+                    [w1,w2] = l.rstrip('\n').split('\t')
                     if args.compose_op in w1:
                         tg = w1.split(args.compose_op)[1]
                         if (not row2id or tg in row2id) and (not col2id or w2 in col2id):
-                            per.count(w1, marker, w2)
+                            per.count(w1,'c', w2)
                     else:
                         if (not row2id or w1 in row2id) and (not col2id or w2 in col2id):
-                            core.count(w1, marker, w2)
+                            core.count(w1,'c', w2)
             except ValueError:
                 logger.error("Error reading line: {0}".format(l))
     

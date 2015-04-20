@@ -38,7 +38,7 @@ def main():
     'bigram targets for which the 1st lexical item is not in the provided list '
     '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-t2', '--targets2', metavar='FILE', help='filter output '
-    'bigram targets for which the 1st lexical item is not in the provided list '
+    'bigram targets for which the 2nd lexical item is not in the provided list '
     '(line-separated list of elements formatted as specified by -tf)')
     parser.add_argument('-c', '--contexts', metavar='FILE', help='filter output '
     'context features by those specified in the file (line-separated list of elements '
@@ -49,11 +49,13 @@ def main():
         help='transform words and lemmas to lowercase')
     parser.add_argument('-tf', '--target-format', default='{lemma}-{cat}', 
                         help="format used for the target. Variables are "
-                        "{word}, {lemma}, {pos} and {cat}")
+                        "{word}, {lemma}, {pos} and {cat} (default: {lemma}-{cat})")
     parser.add_argument('-cf', '--context-format', default='{lemma}-{cat}', 
                         help="format used for the context. Variables are "
-                        "{word}, {lemma}, {pos} and {cat}")
-    parser.add_argument('--linear_comp', help='''Match phrases based on a pseudo-regular expression.
+                        "{word}, {lemma}, {pos} and {cat} (default: {lemma}-{cat})")
+    parser.add_argument('--no-unigrams', action='store_true', default=False,
+                        help="Don't output features for unigram targets")
+    parser.add_argument('-l', '--linear-comp', help='''Match phrases based on a pseudo-regular expression.
     Each token is represented with a T<> marker which can 
     take as optional arguments "word" and "pos". 
     E.g. T<word=big,pos=JJ>(T<pos=JJ>)*T<word=file(rows.txt),pos=NN|NNS>''')
@@ -95,8 +97,11 @@ def main():
     else:
         contexts_words = None
         
+    
+    matchers = []
     #create a matcher for the core space
-    matchers = [UnigramMatcher(None, args.target_format)]
+    if not args.no_unigrams:
+        matchers.append(UnigramMatcher())
     #build functions that match a peripheral bigram
     matchers.extend(get_composition_matchers(args) )
     #define the kind of features we want to extract

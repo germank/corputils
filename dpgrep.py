@@ -51,6 +51,9 @@ def main():
     parser.add_argument('-hp', '--headpos', help='Dependency arc matching: right pos regexp')
     parser.add_argument('-hf', '--headfile', help='Dependency arc matching: file '
     'containing possible head tokens (with the format specified by -ff)')
+    parser.add_argument('--intersect', default=False, action='store_true',
+        help='If a linear composition is combined with a dependency criteria, '\
+        'this argument demands that they predicate about the same words')
 
     args = parser.parse_args()
 
@@ -75,10 +78,19 @@ def main():
     for sentence in corpus_reader:
         #detect compositions
         #comp_matches is a set, so we don't count repetitions
-        comp_matches = set()
-        for match_func in match_funcs:
-            comp_matches.update(match_func.get_matches(sentence))
-        if comp_matches:
+        comp_matches = set.union(*(set(match_func.get_matches(sentence))
+            for match_func in match_funcs))
+        if args.intersect:
+            tokens = []
+            for match_func in match_funcs:
+                this_matches = match_func.get_matches(sentence)
+                all_matches = [set(match.get_tokens()) for match in
+                    this_matches]
+                tokens.append(set.union(*all_matches) if all_matches else set())
+            tokens_int = set.intersection(*tokens) if tokens else None
+        else:
+            tokens_int = None
+        if comp_matches and (not args.intersect or tokens_int):
             print "<s>"
             #process sentence
             for s_i in sentence: #i,t = index,tuple in sentence

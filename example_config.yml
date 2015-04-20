@@ -1,5 +1,5 @@
 '*':
-    h_cpu: 4:0:0
+    h_cpu: '4:0:0'
     hosts: 'compute-0-[1-9]|compute-1-[1-9]'
 
 count_matches:

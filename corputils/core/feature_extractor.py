@@ -18,16 +18,49 @@ class TargetsFeaturesExtractor():
         to a set of words that are valid matches
         '''
         self.matchers = matchers
-        self.feature_extrator = feature_extractor
+        self.feature_extractor = feature_extractor
         self.target_format = target_format
         self.context_format = context_format
         self.targets = targets
 
     def initialize(self):
-        self.feature_extrator.initialize()
+        self.feature_extractor.initialize()
+        self.targets_ids = {k: {} for k in self.targets.keys()}
+        self.ids_targets = {k: {} for k in self.targets.keys()}
         for k,k_targets in self.targets.iteritems():
             for i, filename in k_targets.iteritems():
                 self.targets[k][i] = set(w.strip() for w in file(filename))
+                self.ids_targets[k][i] = [w.strip() for w in file(filename)]
+                self.targets_ids[k][i] = {w.strip(): j for j,w in
+                    enumerate(file(filename))}
+
+    def encode_feature(self, feature):
+        return self.feature_extractor.encode(feature)
+
+    def decode_feature(self, feature):
+        return self.feature_extractor.decode(feature)
+        
+    def encode_target(self, target):
+        '''
+        '''
+        if len(target) not in self.targets:
+            #? to be tested
+            return target.format(self.target_format)
+        
+        targets_ids = self.targets_ids[len(target)]
+        fmt_target = tuple(t.format(self.target_format) for t in target)
+
+        return tuple(map(lambda (i,t): targets_ids[i+1][t],
+        enumerate(fmt_target)))
+
+    def decode_target(self, target_code):
+        ids_targets = self.ids_targets[len(target_code)]
+        
+        return tuple(map(lambda (i,t): ids_targets[i+1][t],
+        enumerate(target_code)))
+        #return tuple([ids_targets[i+1][t.format(self.target_format)] for i,t in
+        #    enumerate(targets)])
+
 
     def skip_target(self, target):
         if len(target) not in self.targets:
@@ -43,7 +76,7 @@ class TargetsFeaturesExtractor():
 
     def __call__(self, corpus_reader):
         matchers = self.matchers
-        feature_extractor = self.feature_extrator
+        feature_extractor = self.feature_extractor
             
         #a chunk is usually a sentence (we cannot get features passed the chunk)
         for chunk in corpus_reader:
@@ -107,12 +140,29 @@ class BOWFeatureExtractor(object):
 
     def initialize(self):
         if self.context_words:
-            self.context_words = set(w.strip() for w in file(self.context_words))
+            context_words_file = self.context_words
+            self.context_words = set(w.strip() for w in file(context_words_file))
+            self.context_words_ids = {w.strip():i for i,w in
+                enumerate(file(context_words_file))}
+            self.ids_context_words = list(w.strip() for w in file(context_words_file))
     
     def is_valid_feature(self, t):
         return not self.context_words or t.format(self.context_format) in\
             self.context_words
 
+    def encode(self, t):
+        if self.context_words:
+            return self.context_words_ids[t.format(self.context_format)]
+        else:
+            return t.format(self.context_format)
+    
+    def decode(self, t):
+        if self.context_words:
+            return self.ids_context_words[t]
+        else:
+            return t
+            
+        
     def get_features(self, target, chunk):
         #FIXME: generalize!!!!!
         if len(target.tokens) == 1:
